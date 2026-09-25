@@ -360,15 +360,15 @@ export default function EventJourney() {
         {/* Top Header Badge */}
         <div className="journey-top-bar">
           <div className="journey-eyebrow-capsule">
-            <span className="journey-eyebrow-label">THE WEDDING</span>
+            <span className="journey-eyebrow-label">HOSTED CELEBRATIONS</span>
             <span className="journey-eyebrow-divider" />
-            <span className="journey-eyebrow-sub">FIVE SACRED MOMENTS · ONE ETERNAL LOVE</span>
+            <span className="journey-eyebrow-sub">FIVE SIGNATURE MOMENTS · A CURATED CELEBRATION</span>
           </div>
 
           <div className="journey-live-counter">
             <span className="counter-dot" />
             <span className="counter-text">
-              CEREMONY 0{activeIdx + 1} OF 0{JOURNEY_MILESTONES.length}
+              CELEBRATION 0{activeIdx + 1} OF 0{JOURNEY_MILESTONES.length}
             </span>
           </div>
         </div>
@@ -559,18 +559,6 @@ export default function EventJourney() {
               </div>
             );
           })}
-        </div>
-
-        {/* PINNED BOTTOM ACTION (Matches Video Reference: "Limited seats available" + "Reserve Now") */}
-        <div className="journey-pinned-footer">
-          <span className="journey-footer-notice">LIMITED SEATS AVAILABLE</span>
-          <button
-            type="button"
-            className="journey-footer-cta-btn"
-            onClick={() => setSelectedMilestone(JOURNEY_MILESTONES[activeIdx])}
-          >
-            Reserve Now
-          </button>
         </div>
 
         {/* BOTTOM INTERACTIVE TIMELINE SCRUBBER */}

@@ -2724,53 +2724,7 @@ body {
   50% { opacity: 0.85; transform: scale(1.35); }
 }
 
-/* Pinned Bottom CTA (Matches Video Reference: "Limited seats available" + [Reserve Now]) */
-.journey-pinned-footer {
-  position: absolute;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  z-index: 30;
-  pointer-events: auto;
-}
 
-.journey-footer-notice {
-  font-family: var(--font-primary);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.45);
-  text-transform: uppercase;
-}
-
-.journey-footer-cta-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 28px;
-  background: #FFFFFF;
-  color: #0C0C0E;
-  border: none;
-  border-radius: 9999px;
-  font-family: var(--font-primary);
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-
-.journey-footer-cta-btn:hover {
-  background: #E5CA96;
-  color: #0C0C0E;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(229, 202, 150, 0.4);
-}
 
 /* RIGHT COLUMN: Overlapping Multi-Image Collage with 2.5D Parallax */
 .journey-collage-col {
@@ -2850,21 +2804,21 @@ body {
   box-shadow: inset 0 0 45px 15px rgba(12, 12, 14, 0.45);
 }
 
-/* Floating Accent 1 (Top-Left Offset with Parallax) */
+/* Floating Accent 1 (Shifted cleanly towards left for clear visibility) */
 .collage-accent-top {
-  top: 15px;
-  left: 2%;
-  width: clamp(160px, 15vw, 220px);
+  top: 5px;
+  left: -12%;
+  width: clamp(180px, 16vw, 240px);
   aspect-ratio: 4 / 3;
-  z-index: 2;
+  z-index: 4;
   will-change: transform;
 }
 
 .collage-accent-top .collage-card-inner {
   border-radius: 14px;
   box-shadow: 
-    0 18px 45px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(255, 255, 255, 0.06);
+    0 22px 50px rgba(0, 0, 0, 0.78),
+    0 0 0 1px rgba(229, 202, 150, 0.16);
 }
 
 /* Floating Accent 2 (Bottom-Right Offset with Parallax) */
