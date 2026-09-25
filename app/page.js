@@ -7,6 +7,23 @@ import Hero from '../components/Hero';
 import About from '../components/About';
 import Services from '../components/Services';
 import EventJourney from '../components/EventJourney';
+import dynamic from 'next/dynamic';
+
+const Gallery3D = dynamic(() => import('../components/Gallery3D'), {
+  ssr: false,
+  loading: () => (
+    <div
+      id="gallery"
+      style={{
+        minHeight: '100vh',
+        background: '#070709',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    />
+  ),
+});
 
 export default function Home() {
   const [activeSection, setActiveSection] = useState('home');
@@ -14,11 +31,14 @@ export default function Home() {
   useEffect(() => {
     const handleScroll = () => {
       const scrollPos = window.scrollY + 250;
+      const galleryEl = document.getElementById('gallery');
       const journeyEl = document.getElementById('journey');
       const servicesEl = document.getElementById('services');
       const aboutEl = document.getElementById('about');
 
-      if (journeyEl && scrollPos >= journeyEl.offsetTop) {
+      if (galleryEl && scrollPos >= galleryEl.offsetTop) {
+        setActiveSection('gallery');
+      } else if (journeyEl && scrollPos >= journeyEl.offsetTop) {
         setActiveSection('journey');
       } else if (servicesEl && scrollPos >= servicesEl.offsetTop) {
         setActiveSection('services');
@@ -50,6 +70,7 @@ export default function Home() {
           <About />
           <Services />
           <EventJourney />
+          <Gallery3D />
         </main>
       </div>
     </SmoothScroll>
