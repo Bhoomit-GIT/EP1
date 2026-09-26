@@ -4,7 +4,7 @@ import React, { useRef, useEffect } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-gsap.registerPlugin(ScrollTrigger);
+if (typeof window !== 'undefined') gsap.registerPlugin(ScrollTrigger);
 
 const SERVICE_PROJECTS = [
   {
@@ -51,12 +51,12 @@ export default function Services() {
     const ctx = gsap.context(() => {
       const visuals = visualRefs.current;
 
-      // Master Scroll-Driven Timeline pinned across 450vh
+      // Master Scroll-Driven Timeline pinned with comfortable resting buffer
       const masterTL = gsap.timeline({
         scrollTrigger: {
           trigger: sectionRef.current,
           start: 'top top',
-          end: '+=450%',
+          end: '+=470%',
           pin: stageRef.current,
           scrub: 1.2,
           anticipatePin: 1,
@@ -66,122 +66,128 @@ export default function Services() {
 
       /* ------------------------------------------------------------------
          INITIAL STATES:
-         - Visual 0 (Space 10): ALREADY PRESENT in center focus (No pop up).
-         - Subsequent visuals wait at the DOWNSIDE (y: 75vh below viewport)
-           to glide upwards into view.
+         - All visuals start waiting below at the downside (y: 75vh).
+         - Central headline starts hidden (y: 45px, opacity: 0) to animate
+           in FIRST as the user scrolls into the section.
          ------------------------------------------------------------------ */
-      // Visual 0 (Space 10): ALREADY PRESENT in resting position
-      gsap.set(visuals[0], {
-        y: '0vh',
-        x: '0vw',
-        scale: 1.0,
-        opacity: 1,
-        filter: 'blur(0px)',
+      visuals.forEach((visual) => {
+        if (visual) {
+          gsap.set(visual, {
+            y: '75vh',
+            x: '0vw',
+            scale: 0.94,
+            opacity: 0,
+            filter: 'blur(24px)',
+          });
+        }
       });
 
-      // Visual 1 (Cuatro): Waiting below at the downside
-      gsap.set(visuals[1], {
-        y: '75vh',
-        x: '0vw',
-        scale: 0.94,
+      // Typography initial states: Headline 1 enters on scroll first
+      gsap.set(headline1Ref.current, {
         opacity: 0,
-        filter: 'blur(26px)',
+        y: 40,
+        scale: 0.97,
+        filter: 'blur(8px)',
       });
-
-      // Visual 2 (Jeep): Waiting below at the downside
-      gsap.set(visuals[2], {
-        y: '75vh',
-        x: '0vw',
-        scale: 0.94,
+      gsap.set(headline2Ref.current, {
         opacity: 0,
-        filter: 'blur(26px)',
+        y: 24,
+        filter: 'blur(8px)',
       });
-
-      // Visual 3 (Paseo Festival): Waiting below at the downside
-      gsap.set(visuals[3], {
-        y: '75vh',
-        x: '0vw',
-        scale: 0.94,
-        opacity: 0,
-        filter: 'blur(26px)',
-      });
-
-      // Typography initial states
-      gsap.set(headline1Ref.current, { opacity: 1, y: 0 });
-      gsap.set(headline2Ref.current, { opacity: 0, y: 22 });
 
       /* ------------------------------------------------------------------
-         TIMELINE CHOREOGRAPHY: IMAGES COME FROM DOWNSIDE
-         - Visual 0 holds, then exits upwards.
-         - Visual 1 comes from DOWNSIDE (75vh -> 0vh), holds, exits upwards.
-         - Visual 2 comes from DOWNSIDE (75vh -> 0vh), holds, exits upwards.
-         - Visual 3 comes from DOWNSIDE (75vh -> 0vh), holds & settles.
+         TIMELINE CHOREOGRAPHY:
+         1. TEXT ENTERS FIRST: Scroll brings "Unforgettable experiences" into view
+         2. IMAGE ENTERS SECOND: Space 10 glides up from downside after text arrives
+         3. Subsequent visuals and headlines transition in harmony
          ------------------------------------------------------------------ */
 
-      // --- 1. VISUAL 0 (Space 10, Right Flank) ---
-      masterTL
-        // Holds presence initially, with subtle upward drift
-        .to(visuals[0], {
-          y: '-4vh',
-          scale: 1.01,
-          duration: 12,
-          ease: 'none',
-        }, 0)
-        // Exits UPWARDS toward the top
-        .to(visuals[0], {
-          y: '-75vh',
-          scale: 0.92,
-          opacity: 0,
-          filter: 'blur(26px)',
-          duration: 16,
-          ease: 'power1.in',
-        }, 12);
+      // --- 1. TEXT ENTRANCE (Reveals on initial scroll into section) ---
+      masterTL.to(headline1Ref.current, {
+        opacity: 1,
+        y: 0,
+        scale: 1.0,
+        filter: 'blur(0px)',
+        duration: 12,
+        ease: 'power2.out',
+      }, 0);
 
-      // --- 2. VISUAL 1 (Cuatro, Left Flank) ---
+      // --- 2. VISUAL 0 (Space 10, Right Flank) - Enters AFTER text ---
       masterTL
-        // Comes from DOWNSIDE up into center focus
-        .to(visuals[1], {
+        // Glides up from downside into center focus after text is established
+        .to(visuals[0], {
           y: '0vh',
           x: '0vw',
           scale: 1.0,
           opacity: 1,
           filter: 'blur(0px)',
-          duration: 16,
-          ease: 'power1.out',
-        }, 10)
+          duration: 14,
+          ease: 'power2.out',
+        }, 12)
         // Holds presence in focus, with subtle upward drift
-        .to(visuals[1], {
+        .to(visuals[0], {
           y: '-4vh',
           scale: 1.01,
-          duration: 14,
+          duration: 10,
           ease: 'none',
         }, 26)
         // Exits UPWARDS toward the top
+        .to(visuals[0], {
+          y: '-75vh',
+          scale: 0.92,
+          opacity: 0,
+          filter: 'blur(24px)',
+          duration: 12,
+          ease: 'power1.in',
+        }, 36);
+
+      // --- 3. VISUAL 1 (Cuatro, Left Flank) ---
+      masterTL
+        // Comes from DOWNSIDE up into center focus
+        .to(visuals[1], {
+          y: '0vh',
+          x: '0vw',
+          scale: 1.0,
+          opacity: 1,
+          filter: 'blur(0px)',
+          duration: 14,
+          ease: 'power2.out',
+        }, 34)
+        // Holds presence in focus, with subtle upward drift
+        .to(visuals[1], {
+          y: '-4vh',
+          scale: 1.01,
+          duration: 10,
+          ease: 'none',
+        }, 48)
+        // Exits UPWARDS toward the top
         .to(visuals[1], {
           y: '-75vh',
           scale: 0.92,
           opacity: 0,
-          filter: 'blur(26px)',
-          duration: 16,
+          filter: 'blur(24px)',
+          duration: 12,
           ease: 'power1.in',
-        }, 40);
+        }, 58);
 
-      // --- CENTER HEADLINE TRANSITION ---
+      // --- 4. CENTER HEADLINE TRANSITION ---
       masterTL
         .to(headline1Ref.current, {
           opacity: 0,
-          y: -20,
+          y: -22,
+          filter: 'blur(6px)',
           duration: 8,
           ease: 'power1.inOut',
-        }, 38)
+        }, 54)
         .to(headline2Ref.current, {
           opacity: 1,
           y: 0,
+          filter: 'blur(0px)',
           duration: 8,
           ease: 'power1.inOut',
-        }, 44);
+        }, 60);
 
-      // --- 3. VISUAL 2 (Jeep Launch Event, Right Flank) ---
+      // --- 5. VISUAL 2 (Jeep Launch Event, Right Flank) ---
       masterTL
         // Comes from DOWNSIDE up into center focus
         .to(visuals[2], {
@@ -190,27 +196,27 @@ export default function Services() {
           scale: 1.0,
           opacity: 1,
           filter: 'blur(0px)',
-          duration: 16,
-          ease: 'power1.out',
-        }, 38)
+          duration: 14,
+          ease: 'power2.out',
+        }, 58)
         // Holds presence in focus, with subtle upward drift
         .to(visuals[2], {
           y: '-4vh',
           scale: 1.01,
-          duration: 14,
+          duration: 10,
           ease: 'none',
-        }, 54)
+        }, 72)
         // Exits UPWARDS toward the top
         .to(visuals[2], {
           y: '-75vh',
           scale: 0.92,
           opacity: 0,
-          filter: 'blur(26px)',
-          duration: 16,
+          filter: 'blur(24px)',
+          duration: 12,
           ease: 'power1.in',
-        }, 68);
+        }, 82);
 
-      // --- 4. VISUAL 3 (Paseo Festival EEUU, Left Flank) ---
+      // --- 6. VISUAL 3 (Paseo Festival EEUU, Left Flank) ---
       masterTL
         // Comes from DOWNSIDE up into center focus
         .to(visuals[3], {
@@ -219,23 +225,41 @@ export default function Services() {
           scale: 1.0,
           opacity: 1,
           filter: 'blur(0px)',
-          duration: 16,
-          ease: 'power1.out',
-        }, 66)
-        // Remains present and softly settles as the section concludes
+          duration: 14,
+          ease: 'power2.out',
+        }, 80)
+        // Remains in center focus with subtle breathing drift
         .to(visuals[3], {
-          y: '-4vh',
+          y: '-3.5vh',
           scale: 1.01,
           duration: 18,
           ease: 'none',
-        }, 82);
+        }, 94)
+        // Ascends upward becoming blurry — Hosted Events rolls into view as this occurs
+        .to(visuals[3], {
+          y: '-60vh',
+          scale: 0.94,
+          opacity: 0,
+          filter: 'blur(24px)',
+          duration: 12,
+          ease: 'power1.in',
+        }, 112);
 
-      // Hairline scroll progress tracker at the bottom
+      // Headline 2 softly fades out as Visual 3 ascends and blurs
+      masterTL.to(headline2Ref.current, {
+        opacity: 0,
+        y: -18,
+        filter: 'blur(6px)',
+        duration: 10,
+        ease: 'power1.inOut',
+      }, 114);
+
+      // Hairline scroll progress tracker across the full duration
       if (progressBarRef.current) {
         masterTL.to(progressBarRef.current, {
           scaleX: 1,
           ease: 'none',
-          duration: 100,
+          duration: 124,
         }, 0);
       }
     }, sectionRef);
@@ -247,22 +271,6 @@ export default function Services() {
     <section ref={sectionRef} id="services" className="swiss-services-section">
       {/* Pinned Full-Screen Stage */}
       <div ref={stageRef} className="swiss-services-stage">
-        {/* Minimal Top Brand & Navigation Header (Matching Reference Frames) */}
-        <div className="swiss-top-brand-bar">
-          <div className="swiss-brand-pill">
-            <span className="swiss-logo-dots">
-              <span className="dot dot-1" />
-              <span className="dot dot-2" />
-              <span className="dot dot-3" />
-            </span>
-          </div>
-
-          <div className="swiss-top-nav-pill">
-            <a href="#about" className="nav-pill-link">Work</a>
-            <a href="#services" className="nav-pill-link">Info</a>
-            <a href="#contact" className="nav-pill-link">Contact</a>
-          </div>
-        </div>
 
         {/* Central Dominant Grotesque Typography Layer */}
         <div className="swiss-center-content">

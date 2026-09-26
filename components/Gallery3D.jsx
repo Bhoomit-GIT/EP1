@@ -2,27 +2,42 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronLeft, ChevronRight, Layers, Maximize2, Sparkles } from 'lucide-react';
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Maximize2,
+  Eye,
+} from 'lucide-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { GALLERY_IMAGES } from '../data/galleryImages';
 
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger);
+}
+
 export default function Gallery3D() {
-  // Mode: 'scattered' (2.5D floating depth canvas) or 'deck3d' (3D perspective rectangle deck)
-  const [mode, setMode] = useState('scattered');
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [lightboxImg, setLightboxImg] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [cursorPos, setCursorPos] = useState({ x: -100, y: -100, isHovering: false });
 
-  const containerRef = useRef(null);
+  // References
+  const sectionRef = useRef(null);
+  const stageRef = useRef(null);
   const canvasRef = useRef(null);
+  const cardRefs = useRef([]);
+  const typoRef = useRef(null);
+  const sublineRef = useRef(null);
+  const cardsWrapperRef = useRef(null);
+  const dragBadgeRef = useRef(null);
 
-  // Scattered Canvas Pan Physics (Inertia & Dampening)
+  // Infinite Canvas Pan Physics (Inertia & Smooth Dampening)
   const panRef = useRef({
     currentX: 0,
     currentY: 0,
     targetX: 0,
     targetY: 0,
-    startX: 0,
-    startY: 0,
     isPanning: false,
     velX: 0,
     velY: 0,
@@ -30,88 +45,300 @@ export default function Gallery3D() {
     lastY: 0,
   });
 
-  // 3D Deck Physics
-  const deckRef = useRef({
-    currentIdx: 0,
-    targetIdx: 0,
-    startX: 0,
-    isDragging: false,
-    velX: 0,
-  });
+  // Cursor Parallax Ref
+  const cursorParallaxRef = useRef({ rawX: 0, rawY: 0, currentX: 0, currentY: 0 });
 
-  // Generate deterministic scattered positions for all 53 images
-  const scatteredImages = useMemo(() => {
-    // Generate a spacious organic constellation around the central typography
-    const total = GALLERY_IMAGES.length;
-    return GALLERY_IMAGES.map((img, idx) => {
-      // Golden angle distribution for natural organic scattering
-      const angle = (idx * 137.5 * Math.PI) / 180;
-      const radius = 240 + Math.sqrt(idx) * 220; // Expands outward
-      const rawX = Math.cos(angle) * radius * 1.4 + ((idx % 7) - 3) * 60;
-      const rawY = Math.sin(angle) * radius * 0.95 + (((idx + 2) % 5) - 2) * 50;
-      const x = Math.round(rawX * 10) / 10;
-      const y = Math.round(rawY * 10) / 10;
-      
-      // Depth planes: 0 (deep background, blurred), 1 (midground), 2 (foreground, sharp)
-      const depthTier = idx % 3;
-      const depthBlur = depthTier === 0 ? 5 : depthTier === 1 ? 2 : 0;
-      const scale = depthTier === 0 ? 0.72 : depthTier === 1 ? 0.88 : 1.05;
-      const zIndex = depthTier === 0 ? 2 : depthTier === 1 ? 5 : 10;
-      const opacity = depthTier === 0 ? 0.6 : depthTier === 1 ? 0.85 : 1;
-      const rotation = Math.round(((((idx * 17) % 21) - 10) * 0.8) * 10) / 10;
+  // ══════════════════════════════════════════════════════════════════
+  // RANDOMIZED AIRY CONSTELLATION GENERATOR (Unique On Each Load)
+  // 24 Cards distributed across 3600px × 2400px toroidal domain
+  // Maximum distance between adjacent images is bounded (<= 580px - 750px)
+  // Guarantees MINIMUM OF 6 IMAGES visible in frame at all times (sharp + blur)
+  // ══════════════════════════════════════════════════════════════════
+  const generateRandomConstellation = useCallback(() => {
+    // Shuffle available 53 high-res images
+    const shuffledImages = [...GALLERY_IMAGES].sort(() => Math.random() - 0.5);
 
-      return {
-        ...img,
-        x,
-        y,
-        scale,
-        depthBlur,
-        zIndex,
-        opacity,
-        rotation,
-      };
-    });
+    const cards = [];
+    let cardIdx = 0;
+
+    // 6 columns × 4 rows = 24 cells
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 6; col++) {
+        const imgData = shuffledImages[cardIdx % shuffledImages.length];
+
+        // Base cell centers across 3600px × 2400px domain
+        const colCenter = -1500 + col * 600;
+        const rowCenter = -900 + row * 600;
+
+        // Bounded random jitter (prevents overlapping & guarantees min 6 visible in frame)
+        const jitterX = (Math.random() - 0.5) * 180;
+        const jitterY = (Math.random() - 0.5) * 140;
+
+        const baseX = Math.round(colCenter + jitterX);
+        const baseY = Math.round(rowCenter + jitterY);
+
+        // Balanced tier distribution with organic variation
+        const isBaseSharp = (col + row) % 2 === 0;
+        const tier = (Math.random() > 0.15 ? isBaseSharp : !isBaseSharp) ? 'sharp' : 'blur';
+
+        // Randomized aspect ratio & editorial dimensions
+        const isLandscape = Math.random() > 0.45;
+        let width, height, scale, blur;
+
+        if (tier === 'sharp') {
+          scale = 1.0;
+          blur = 0;
+          if (isLandscape) {
+            width = Math.round(280 + Math.random() * 25);
+            height = Math.round(195 + Math.random() * 15);
+          } else {
+            width = Math.round(175 + Math.random() * 15);
+            height = Math.round(250 + Math.random() * 20);
+          }
+        } else {
+          scale = Number((0.72 + Math.random() * 0.04).toFixed(2));
+          blur = Math.round(13 + Math.random() * 4);
+          if (isLandscape) {
+            width = Math.round(250 + Math.random() * 25);
+            height = Math.round(175 + Math.random() * 15);
+          } else {
+            width = Math.round(155 + Math.random() * 15);
+            height = Math.round(225 + Math.random() * 15);
+          }
+        }
+
+        cards.push({
+          ...imgData,
+          galleryIdx: cardIdx,
+          spatialId: `random-card-${cardIdx}-${imgData.id}`,
+          baseX,
+          baseY,
+          width,
+          height,
+          scale,
+          tier,
+          blur,
+          aspect: isLandscape ? 'landscape' : 'portrait',
+          floatDelay: `${-(Math.random() * 8).toFixed(2)}s`,
+          floatDuration: `${(5.8 + Math.random() * 2.8).toFixed(1)}s`,
+        });
+
+        cardIdx++;
+      }
+    }
+
+    return cards;
   }, []);
 
-  // Smooth RAF Animation Loop for Physics & Custom Easing
+  const [spatialUniverseCards, setSpatialUniverseCards] = useState(() => generateRandomConstellation());
+
+  // Randomize fresh layout on client mount
+  useEffect(() => {
+    setSpatialUniverseCards(generateRandomConstellation());
+  }, [generateRandomConstellation]);
+
+  // ══════════════════════════════════════════════════════════════════
+  // GSAP SCROLL & ENTRANCE ANIMATION (Pinned Stage Timeline)
+  // ══════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!sectionRef.current || !stageRef.current) return;
+
+    const ctx = gsap.context(() => {
+      const typo = typoRef.current;
+      const words = typo?.querySelectorAll('.luxury-word');
+      const subline = sublineRef.current;
+      const cardsWrapper = cardsWrapperRef.current;
+      if (!words || !words.length) return;
+
+      let hasPlayed = false;
+      const playEntrance = () => {
+        if (hasPlayed) return;
+        hasPlayed = true;
+
+        gsap.fromTo(
+          words,
+          { yPercent: 120, opacity: 0 },
+          {
+            yPercent: 0,
+            opacity: 1,
+            stagger: 0.08,
+            duration: 1.2,
+            ease: 'power3.out',
+          }
+        );
+
+        if (subline) {
+          gsap.fromTo(
+            subline,
+            { opacity: 0, y: 18 },
+            {
+              opacity: 1,
+              y: 0,
+              duration: 0.9,
+              delay: 0.4,
+              ease: 'power2.out',
+            }
+          );
+        }
+      };
+
+      ScrollTrigger.create({
+        trigger: sectionRef.current,
+        start: 'top 85%',
+        onEnter: playEntrance,
+        onEnterBack: playEntrance,
+      });
+
+      const rect = sectionRef.current.getBoundingClientRect();
+      if (rect.top < window.innerHeight * 0.95 && rect.bottom > 0) {
+        playEntrance();
+      }
+
+      // Master GSAP Pinned Scrub Timeline for Cinematic Stage Zoom
+      const scrubTL = gsap.timeline({
+        scrollTrigger: {
+          trigger: sectionRef.current,
+          start: 'top top',
+          end: '+=200%',
+          pin: stageRef.current,
+          scrub: 1.2,
+          anticipatePin: 1,
+          invalidateOnRefresh: true,
+          onUpdate: (self) => {
+            if (typo) {
+              typo.style.pointerEvents = self.progress > 0.35 ? 'none' : 'auto';
+            }
+          },
+        },
+      });
+
+      // 0% -> 15%: Hold headline
+      scrubTL.to({}, { duration: 15 });
+
+      // 15% -> 55%: Dissolve title & bloom spatial canvas forward
+      if (typo) {
+        scrubTL.to(
+          typo,
+          {
+            y: -100,
+            opacity: 0,
+            scale: 0.9,
+            filter: 'blur(12px)',
+            ease: 'power2.inOut',
+            duration: 40,
+          },
+          15
+        );
+      }
+
+      if (cardsWrapper) {
+        gsap.set(cardsWrapper, { scale: 0.55, opacity: 0, filter: 'blur(10px)' });
+        scrubTL.to(
+          cardsWrapper,
+          {
+            scale: 1.0,
+            opacity: 1.0,
+            filter: 'blur(0px)',
+            ease: 'power2.out',
+            duration: 40,
+          },
+          15
+        );
+      }
+
+      // 55% -> 100%: Active interactive exploration
+      scrubTL.to({}, { duration: 45 }, 55);
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
+  // ══════════════════════════════════════════════════════════════════
+  // RAF PHYSICS LOOP: SEAMLESS TOROIDAL WRAPPING (120 FPS)
+  // 3600px × 2400px domain with offscreen modulo wrapping
+  // ══════════════════════════════════════════════════════════════════
   useEffect(() => {
     let animId;
+    const W = 3600;
+    const H = 2400;
+    const halfW = W / 2;
+    const halfH = H / 2;
 
     const updatePhysics = () => {
-      if (mode === 'scattered' && canvasRef.current) {
-        const pan = panRef.current;
-        // Ease target to current with custom lerp factor (0.08 for buttery smoothness)
-        pan.currentX += (pan.targetX - pan.currentX) * 0.08;
-        pan.currentY += (pan.targetY - pan.currentY) * 0.08;
+      const pan = panRef.current;
+      const cp = cursorParallaxRef.current;
 
-        canvasRef.current.style.transform = `translate3d(${pan.currentX}px, ${pan.currentY}px, 0)`;
-      } else if (mode === 'deck3d') {
-        const deck = deckRef.current;
-        deck.currentIdx += (deck.targetIdx - deck.currentIdx) * 0.12;
-      }
+      // Inertial lerp
+      pan.currentX += (pan.targetX - pan.currentX) * 0.085;
+      pan.currentY += (pan.targetY - pan.currentY) * 0.085;
+
+      // Cursor parallax
+      cp.currentX += (cp.rawX - cp.currentX) * 0.05;
+      cp.currentY += (cp.rawY - cp.currentY) * 0.05;
+
+      const totalX = pan.currentX + cp.currentX;
+      const totalY = pan.currentY + cp.currentY;
+
+      // Seamless toroidal wrap on every card
+      cardRefs.current.forEach((el, idx) => {
+        if (!el) return;
+        const card = spatialUniverseCards[idx];
+        if (!card) return;
+
+        let rx = (card.baseX + totalX + halfW) % W;
+        if (rx < 0) rx += W;
+        const wrapX = rx - halfW;
+
+        let ry = (card.baseY + totalY + halfH) % H;
+        if (ry < 0) ry += H;
+        const wrapY = ry - halfH;
+
+        el.style.transform = `translate3d(${wrapX.toFixed(2)}px, ${wrapY.toFixed(2)}px, 0) scale(${card.scale})`;
+      });
 
       animId = requestAnimationFrame(updatePhysics);
     };
 
     animId = requestAnimationFrame(updatePhysics);
     return () => cancelAnimationFrame(animId);
-  }, [mode]);
+  }, [spatialUniverseCards]);
 
-  // Pointer Movement for Magnetic "DRAG" Cursor Badge
+  // Mouse move handler for Magnetic Cursor & Parallax
   const handleMouseMove = useCallback((e) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    setCursorPos({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      isHovering: true,
-    });
+    if (!stageRef.current) return;
+    const rect = stageRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
+    // Parallax shift
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    cursorParallaxRef.current.rawX = ((x - cx) / cx) * -24;
+    cursorParallaxRef.current.rawY = ((y - cy) / cy) * -18;
+
+    // Magnetic Drag Badge Follower (matching reference screenshot)
+    if (dragBadgeRef.current) {
+      dragBadgeRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+
+      const isOverInteractive = Boolean(
+        e.target &&
+          e.target.closest &&
+          e.target.closest('button, a, .lightbox-modal, .gallery-top-nav')
+      );
+
+      if (isOverInteractive) {
+        dragBadgeRef.current.classList.remove('visible');
+      } else {
+        dragBadgeRef.current.classList.add('visible');
+      }
+    }
+
+    // Drag panning
     if (panRef.current.isPanning) {
       const dx = e.clientX - panRef.current.lastX;
       const dy = e.clientY - panRef.current.lastY;
-      panRef.current.targetX += dx;
-      panRef.current.targetY += dy;
+      panRef.current.targetX += dx * 1.2;
+      panRef.current.targetY += dy * 1.2;
       panRef.current.velX = dx;
       panRef.current.velY = dy;
       panRef.current.lastX = e.clientX;
@@ -120,348 +347,266 @@ export default function Gallery3D() {
   }, []);
 
   const handleMouseDown = useCallback((e) => {
-    if (mode === 'scattered') {
-      panRef.current.isPanning = true;
-      panRef.current.lastX = e.clientX;
-      panRef.current.lastY = e.clientY;
-      setIsDragging(true);
-    } else if (mode === 'deck3d') {
-      deckRef.current.isDragging = true;
-      deckRef.current.startX = e.clientX;
-      setIsDragging(true);
+    if (e.target.closest('button, a, .gallery-top-nav')) return;
+    if (dragBadgeRef.current) {
+      dragBadgeRef.current.classList.add('is-dragging');
     }
-  }, [mode]);
+    panRef.current.isPanning = true;
+    panRef.current.lastX = e.clientX;
+    panRef.current.lastY = e.clientY;
+    setIsDragging(true);
+  }, []);
 
   const handleMouseUp = useCallback(() => {
-    if (mode === 'scattered') {
-      panRef.current.isPanning = false;
-      // Add subtle momentum fling
-      panRef.current.targetX += panRef.current.velX * 4;
-      panRef.current.targetY += panRef.current.velY * 4;
-      panRef.current.velX = 0;
-      panRef.current.velY = 0;
-      setTimeout(() => setIsDragging(false), 50);
-    } else if (mode === 'deck3d') {
-      deckRef.current.isDragging = false;
-      setTimeout(() => setIsDragging(false), 50);
+    if (dragBadgeRef.current) {
+      dragBadgeRef.current.classList.remove('is-dragging');
     }
-  }, [mode]);
+    panRef.current.isPanning = false;
+    panRef.current.targetX += panRef.current.velX * 5.5;
+    panRef.current.targetY += panRef.current.velY * 5.5;
+    panRef.current.velX = 0;
+    panRef.current.velY = 0;
+    setTimeout(() => setIsDragging(false), 50);
+  }, []);
 
-  // Touch handlers for mobile devices
+  // Touch gestures for mobile
   const handleTouchStart = useCallback((e) => {
     if (!e.touches[0]) return;
     const touch = e.touches[0];
-    if (mode === 'scattered') {
-      panRef.current.isPanning = true;
-      panRef.current.lastX = touch.clientX;
-      panRef.current.lastY = touch.clientY;
-    } else if (mode === 'deck3d') {
-      deckRef.current.isDragging = true;
-      deckRef.current.startX = touch.clientX;
-    }
-  }, [mode]);
+    panRef.current.isPanning = true;
+    panRef.current.lastX = touch.clientX;
+    panRef.current.lastY = touch.clientY;
+  }, []);
 
   const handleTouchMove = useCallback((e) => {
     if (!e.touches[0]) return;
     const touch = e.touches[0];
-    if (mode === 'scattered' && panRef.current.isPanning) {
+    if (panRef.current.isPanning) {
       const dx = touch.clientX - panRef.current.lastX;
       const dy = touch.clientY - panRef.current.lastY;
-      panRef.current.targetX += dx * 1.2;
-      panRef.current.targetY += dy * 1.2;
+      panRef.current.targetX += dx * 1.35;
+      panRef.current.targetY += dy * 1.35;
       panRef.current.lastX = touch.clientX;
       panRef.current.lastY = touch.clientY;
-    } else if (mode === 'deck3d' && deckRef.current.isDragging) {
-      const dx = touch.clientX - deckRef.current.startX;
-      if (Math.abs(dx) > 40) {
-        if (dx < 0 && activeIndex < GALLERY_IMAGES.length - 1) {
-          setActiveIndex((prev) => prev + 1);
-        } else if (dx > 0 && activeIndex > 0) {
-          setActiveIndex((prev) => prev - 1);
-        }
-        deckRef.current.startX = touch.clientX;
-      }
     }
-  }, [mode, activeIndex]);
+  }, []);
 
   const handleTouchEnd = useCallback(() => {
-    if (mode === 'scattered') {
-      panRef.current.isPanning = false;
-    } else if (mode === 'deck3d') {
-      deckRef.current.isDragging = false;
-    }
-  }, [mode]);
+    panRef.current.isPanning = false;
+  }, []);
 
-  // Wheel navigation for 3D Deck
+  // Continuous wheel scrolling
   const handleWheel = useCallback((e) => {
-    if (mode === 'deck3d') {
-      e.preventDefault();
-      if (e.deltaY > 20 || e.deltaX > 20) {
-        setActiveIndex((prev) => Math.min(prev + 1, GALLERY_IMAGES.length - 1));
-      } else if (e.deltaY < -20 || e.deltaX < -20) {
-        setActiveIndex((prev) => Math.max(prev - 1, 0));
-      }
-    }
-  }, [mode]);
+    const deltaX = e.deltaX || (e.shiftKey ? e.deltaY : 0);
+    const deltaY = e.shiftKey ? 0 : e.deltaY;
+    panRef.current.targetX -= deltaX * 1.3;
+    panRef.current.targetY -= deltaY * 1.3;
+  }, []);
 
-  // Open 3D Deck Mode on card click
-  const handleCardClick = (idx) => {
+  // Lightbox click
+  const handleCardClick = (img) => {
     if (isDragging) return;
-    setActiveIndex(idx);
-    setMode('deck3d');
+    setLightboxImg(img);
   };
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (mode === 'deck3d') {
-        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-          setActiveIndex((prev) => Math.min(prev + 1, GALLERY_IMAGES.length - 1));
-        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-          setActiveIndex((prev) => Math.max(prev - 1, 0));
-        } else if (e.key === 'Escape') {
-          setMode('scattered');
+      if (lightboxImg) {
+        if (e.key === 'Escape') setLightboxImg(null);
+        if (e.key === 'ArrowRight') {
+          const nextIdx = (lightboxImg.galleryIdx + 1) % GALLERY_IMAGES.length;
+          setLightboxImg({ ...GALLERY_IMAGES[nextIdx], galleryIdx: nextIdx });
+        }
+        if (e.key === 'ArrowLeft') {
+          const prevIdx =
+            (lightboxImg.galleryIdx - 1 + GALLERY_IMAGES.length) % GALLERY_IMAGES.length;
+          setLightboxImg({ ...GALLERY_IMAGES[prevIdx], galleryIdx: prevIdx });
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mode]);
+  }, [lightboxImg]);
 
   return (
-    <section
-      ref={containerRef}
-      id="gallery"
-      className={`gallery-luxury-section ${mode === 'deck3d' ? 'mode-deck3d' : 'mode-scattered'}`}
-      onMouseMove={handleMouseMove}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={() => setCursorPos((p) => ({ ...p, isHovering: false }))}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onWheel={handleWheel}
-    >
-      {/* Top Controls & Eyebrow */}
-      <div className="gallery-header-bar">
-        <div className="gallery-eyebrow-capsule">
-          <span className="gallery-eyebrow-tag">CURATED VISUALS</span>
-          <span className="gallery-eyebrow-dot" />
-          <span className="gallery-eyebrow-title">THE WEDDING ARCHIVES ({GALLERY_IMAGES.length} MOMENTS)</span>
-        </div>
+    <section ref={sectionRef} id="gallery" className="gallery-editorial-universe">
+      {/* Pinned Stage Viewport */}
+      <div
+        ref={stageRef}
+        className="gallery-stage"
+        onMouseMove={handleMouseMove}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onWheel={handleWheel}
+      >
+        {/* Top Minimalist Header (Matching Reference Screenshot) */}
+        <header className="gallery-top-nav">
+          <div className="gallery-brand-tag">
+            <span>THE ARCHIVES</span>
+          </div>
+          <div className="gallery-menu-hint">
+            <span>Curated Moments</span>
+          </div>
+        </header>
 
-        {/* Mode Switch Pill */}
-        <div className="gallery-mode-switch">
-          <button
-            type="button"
-            className={`mode-btn ${mode === 'scattered' ? 'active' : ''}`}
-            onClick={() => setMode('scattered')}
-            title="Floating Canvas View"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>CANVAS</span>
-          </button>
-          <button
-            type="button"
-            className={`mode-btn ${mode === 'deck3d' ? 'active' : ''}`}
-            onClick={() => setMode('deck3d')}
-            title="3D Perspective Deck"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-            <span>3D DECK</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Floating DRAG Cursor Pill in Scattered Mode */}
-      {mode === 'scattered' && cursorPos.isHovering && (
-        <motion.div
-          className="gallery-drag-badge"
-          style={{
-            transform: `translate3d(${cursorPos.x}px, ${cursorPos.y}px, 0)`,
-          }}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ duration: 0.15 }}
-        >
+        {/* Magnetic DRAG Pill Follower Badge (Matching Reference Screenshot) */}
+        <div ref={dragBadgeRef} className="gallery-drag-pill-badge" aria-hidden="true">
           <span>DRAG</span>
-        </motion.div>
-      )}
+        </div>
 
-      {/* ======================================================== */}
-      {/* MODE A: SCATTERED 2.5D CANVAS (Floating Multi-Depth Plane) */}
-      {/* ======================================================== */}
-      <AnimatePresence>
-        {mode === 'scattered' && (
-          <motion.div
-            key="scattered-view"
-            className="gallery-scattered-wrapper"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {/* Centerpiece Luxury Serif Typography */}
-            <div className="gallery-center-typography" aria-hidden="true">
-              <h2 className="luxury-headline">A NEW ERA OF LUXURY</h2>
-              <p className="luxury-subline">AN IMMERSIVE ODYSSEY OF SACRED CELEBRATION</p>
-            </div>
+        {/* Central Luxury Serif Headline with Split Word Animation (Dissolves on Scroll) */}
+        <div ref={typoRef} className="gallery-center-typography" aria-hidden="true">
+          <h2 className="editorial-headline">
+            <span className="luxury-word-mask">
+              <span className="luxury-word">A</span>
+            </span>{' '}
+            <span className="luxury-word-mask">
+              <span className="luxury-word">NEW</span>
+            </span>{' '}
+            <span className="luxury-word-mask">
+              <span className="luxury-word">ERA</span>
+            </span>{' '}
+            <span className="luxury-word-mask">
+              <span className="luxury-word">OF</span>
+            </span>{' '}
+            <span className="luxury-word-mask">
+              <span className="luxury-word luxury-word-gold">LUXURY</span>
+            </span>
+          </h2>
+          <p ref={sublineRef} className="editorial-subline">
+            AN IMMERSIVE ODYSSEY OF SACRED CELEBRATION
+          </p>
+        </div>
 
-            {/* Draggable Multi-Depth Constellation Canvas */}
-            <div ref={canvasRef} className="gallery-canvas-plane">
-              {scatteredImages.map((item, idx) => (
-                <div
-                  key={item.id}
-                  className="scattered-card"
-                  style={{
-                    transform: `translate3d(${item.x}px, ${item.y}px, 0) rotate(${item.rotation}deg) scale(${item.scale})`,
-                    zIndex: item.zIndex,
-                    filter: item.depthBlur > 0 ? `blur(${item.depthBlur}px)` : 'none',
-                    opacity: item.opacity,
-                  }}
-                  onClick={() => handleCardClick(idx)}
+        {/* Seamless Infinite Toroidal Constellation Canvas */}
+        <div ref={cardsWrapperRef} className="gallery-cards-focal-wrapper">
+          <div ref={canvasRef} className="gallery-spatial-plane">
+            {spatialUniverseCards.map((item, idx) => (
+              <div
+                key={item.spatialId}
+                ref={(el) => (cardRefs.current[idx] = el)}
+                className={`airy-editorial-card tier-${item.tier}`}
+                style={{
+                  width: `${item.width}px`,
+                  height: `${item.height}px`,
+                  marginTop: `-${item.height / 2}px`,
+                  marginLeft: `-${item.width / 2}px`,
+                  filter: item.tier === 'blur' ? `blur(${item.blur}px)` : 'none',
+                  opacity: item.tier === 'blur' ? 0.42 : 1.0,
+                  zIndex: item.tier === 'sharp' ? 10 : 2,
+                  animationDelay: item.floatDelay,
+                  animationDuration: item.floatDuration,
+                }}
+                onClick={() => handleCardClick(item)}
+              >
+                <div className="airy-card-inner">
+                  <img
+                    src={item.src}
+                    alt={item.title}
+                    loading="lazy"
+                    draggable={false}
+                  />
+                  {item.tier === 'sharp' && (
+                    <div className="card-subtle-shadow" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* UNIVERSAL CINEMA LIGHTBOX (Ultra-Luxe Fullscreen Theater) */}
+        {/* ============================================================ */}
+        <AnimatePresence>
+          {lightboxImg && (
+            <motion.div
+              className="gallery-lightbox-modal"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35 }}
+              onClick={() => setLightboxImg(null)}
+            >
+              <div className="lightbox-backdrop-blur" />
+
+              <motion.div
+                className="lightbox-dialog"
+                initial={{ scale: 0.88, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.88, opacity: 0 }}
+                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  className="lightbox-close-btn"
+                  onClick={() => setLightboxImg(null)}
+                  title="Close Lightbox (ESC)"
                 >
-                  <div className="card-image-shell">
-                    <img
-                      src={item.src}
-                      alt={item.title}
-                      loading={idx < 12 ? 'eager' : 'lazy'}
-                      draggable={false}
-                    />
-                    <div className="card-ambient-shadow" />
+                  <X className="w-5 h-5" />
+                </button>
+
+                {/* Main Photo Frame */}
+                <div className="lightbox-photo-stage">
+                  <img
+                    src={lightboxImg.src}
+                    alt={lightboxImg.title}
+                    className="lightbox-main-img"
+                  />
+                </div>
+
+                {/* Bottom Metadata & Navigation Controls */}
+                <div className="lightbox-bottom-bar">
+                  <div className="lightbox-info">
+                    <span className="lightbox-pill-tag">{lightboxImg.subtitle}</span>
+                    <h3 className="lightbox-title">{lightboxImg.title}</h3>
+                  </div>
+
+                  <div className="lightbox-nav-group">
+                    <button
+                      type="button"
+                      className="lightbox-arrow-btn"
+                      onClick={() => {
+                        const prevIdx =
+                          (lightboxImg.galleryIdx - 1 + GALLERY_IMAGES.length) %
+                          GALLERY_IMAGES.length;
+                        setLightboxImg({ ...GALLERY_IMAGES[prevIdx], galleryIdx: prevIdx });
+                      }}
+                      title="Previous (Left Arrow)"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+
+                    <span className="lightbox-counter">
+                      {String(lightboxImg.galleryIdx + 1).padStart(2, '0')} /{' '}
+                      {String(GALLERY_IMAGES.length).padStart(2, '0')}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="lightbox-arrow-btn"
+                      onClick={() => {
+                        const nextIdx =
+                          (lightboxImg.galleryIdx + 1) % GALLERY_IMAGES.length;
+                        setLightboxImg({ ...GALLERY_IMAGES[nextIdx], galleryIdx: nextIdx });
+                      }}
+                      title="Next (Right Arrow)"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ======================================================== */}
-      {/* MODE B: 3D PERSPECTIVE RECTANGLE DECK (Cover Flow Carousel) */}
-      {/* ======================================================== */}
-      <AnimatePresence>
-        {mode === 'deck3d' && (
-          <motion.div
-            key="deck3d-view"
-            className="gallery-deck3d-wrapper"
-            initial={{ opacity: 0, scale: 1.05 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.92 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {/* Top Close / Return Pill Button */}
-            <button
-              type="button"
-              className="deck3d-close-btn"
-              onClick={() => setMode('scattered')}
-              title="Return to Canvas"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* 3D Perspective Stage Viewport */}
-            <div className="deck3d-stage">
-              <div className="deck3d-carousel">
-                {GALLERY_IMAGES.map((img, idx) => {
-                  const diff = idx - activeIndex;
-                  const absDiff = Math.abs(diff);
-
-                  // Only render cards within active visible window for extreme 120fps performance
-                  if (absDiff > 7) return null;
-
-                  // 3D Matrix Math matching reference video (tilted 3D cards)
-                  const translateX = diff * 240; // Horizontal offset
-                  const translateZ = -absDiff * 160; // Depth plunge
-                  const rotateY = Math.max(-55, Math.min(55, -diff * 32)); // Perspective angle
-                  const scale = Math.max(0.68, 1 - absDiff * 0.07);
-                  const opacity = Math.max(0.15, 1 - absDiff * 0.16);
-                  const blur = absDiff > 0 ? Math.min(6, absDiff * 1.4) : 0;
-                  const zIndex = 100 - absDiff;
-
-                  return (
-                    <div
-                      key={img.id}
-                      className={`deck3d-card ${diff === 0 ? 'is-active' : ''}`}
-                      style={{
-                        transform: `translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${scale})`,
-                        zIndex,
-                        opacity,
-                        filter: blur > 0 ? `blur(${blur}px)` : 'none',
-                        transition: isDragging
-                          ? 'none'
-                          : 'transform 0.65s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease, filter 0.5s ease',
-                      }}
-                      onClick={() => setActiveIndex(idx)}
-                    >
-                      <div className="deck3d-card-inner">
-                        <img
-                          src={img.src}
-                          alt={img.title}
-                          draggable={false}
-                          loading={absDiff <= 3 ? 'eager' : 'lazy'}
-                        />
-                        <div className="deck3d-glass-reflect" />
-                        
-                        {/* Center Card Title Overlay */}
-                        {diff === 0 && (
-                          <motion.div
-                            className="deck3d-active-meta"
-                            initial={{ opacity: 0, y: 15 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.35, delay: 0.1 }}
-                          >
-                            <span className="active-subtitle">{img.subtitle}</span>
-                            <h4 className="active-title">{img.title}</h4>
-                          </motion.div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Bottom Deck Controls & Dynamic Counter */}
-            <div className="deck3d-controls-bar">
-              <button
-                type="button"
-                className="deck3d-nav-btn"
-                disabled={activeIndex === 0}
-                onClick={() => setActiveIndex((prev) => Math.max(prev - 1, 0))}
-                title="Previous Image"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-
-              <div className="deck3d-counter-pill">
-                <span className="counter-current">
-                  {String(activeIndex + 1).padStart(2, '0')}
-                </span>
-                <span className="counter-slash">/</span>
-                <span className="counter-total">
-                  {String(GALLERY_IMAGES.length).padStart(2, '0')}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                className="deck3d-nav-btn"
-                disabled={activeIndex === GALLERY_IMAGES.length - 1}
-                onClick={() =>
-                  setActiveIndex((prev) =>
-                    Math.min(prev + 1, GALLERY_IMAGES.length - 1)
-                  )
-                }
-                title="Next Image"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </section>
   );
 }

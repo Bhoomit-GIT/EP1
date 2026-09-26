@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-gsap.registerPlugin(ScrollTrigger);
+if (typeof window !== 'undefined') gsap.registerPlugin(ScrollTrigger);
 
 const JOURNEY_MILESTONES = [
   {
@@ -170,18 +170,20 @@ export default function EventJourney() {
       const track = trackRef.current;
       const totalPanels = JOURNEY_MILESTONES.length;
 
-      // Master Pinned Scroll-Driven Horizontal Translation
+      // Master Pinned Scroll-Driven Horizontal Translation with UX Resting Buffer
       const masterTL = gsap.timeline({
         scrollTrigger: {
           trigger: sectionRef.current,
           start: 'top top',
-          end: `+=${totalPanels * 100}%`,
+          end: `+=${(totalPanels + 0.5) * 100}%`,
           pin: stageRef.current,
           scrub: 1.2,
           anticipatePin: 1,
           invalidateOnRefresh: true,
           onUpdate: (self) => {
-            const rawIdx = Math.round(self.progress * (totalPanels - 1));
+            // Horizontal glide completes across first ~91% of scroll travel (leaving 50vh resting buffer)
+            const glideProgress = Math.min(1, self.progress * (110 / 100));
+            const rawIdx = Math.round(glideProgress * (totalPanels - 1));
             setActiveIdx(Math.min(totalPanels - 1, Math.max(0, rawIdx)));
           },
         },
@@ -337,6 +339,9 @@ export default function EventJourney() {
           0
         );
       }
+
+      // Intentional UX resting interval after "After Hours" before entering Gallery section (2nd scroll try release)
+      masterTL.to({}, { duration: 10 }, 100);
     }, sectionRef);
 
     return () => ctx.revert();

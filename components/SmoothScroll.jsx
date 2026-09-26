@@ -5,7 +5,7 @@ import Lenis from 'lenis';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-gsap.registerPlugin(ScrollTrigger);
+if (typeof window !== 'undefined') gsap.registerPlugin(ScrollTrigger);
 
 export default function SmoothScroll({ children }) {
   useEffect(() => {
@@ -16,6 +16,7 @@ export default function SmoothScroll({ children }) {
       smoothWheel: true,
     });
 
+    window.__lenis = lenis;
     lenis.on('scroll', ScrollTrigger.update);
 
     const updateTicker = (time) => {
@@ -26,6 +27,7 @@ export default function SmoothScroll({ children }) {
     gsap.ticker.lagSmoothing(0);
 
     return () => {
+      window.__lenis = null;
       lenis.destroy();
       gsap.ticker.remove(updateTicker);
     };

@@ -1,8 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Menu, X } from 'lucide-react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger);
+}
 
 const NAV_ITEMS = [
   { id: 'home', label: 'HOME' },
@@ -15,6 +21,38 @@ const NAV_ITEMS = [
 
 export default function Navbar({ activeSection, onNavigate }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isScrolledIntoHiddenSection, setIsScrolledIntoHiddenSection] = useState(false);
+
+  useEffect(() => {
+    let st;
+    const initTrigger = () => {
+      const journeyEl = document.getElementById('journey');
+      const galleryEl = document.getElementById('gallery');
+      if (!journeyEl || !galleryEl) return;
+
+      st = ScrollTrigger.create({
+        trigger: journeyEl,
+        start: 'top 80px',
+        endTrigger: galleryEl,
+        end: 'bottom top',
+        onEnter: () => setIsScrolledIntoHiddenSection(true),
+        onLeave: () => setIsScrolledIntoHiddenSection(false),
+        onEnterBack: () => setIsScrolledIntoHiddenSection(true),
+        onLeaveBack: () => setIsScrolledIntoHiddenSection(false),
+      });
+    };
+
+    const timer = setTimeout(initTrigger, 150);
+    return () => {
+      clearTimeout(timer);
+      if (st) st.kill();
+    };
+  }, []);
+
+  const isHidden =
+    isScrolledIntoHiddenSection ||
+    activeSection === 'journey' ||
+    activeSection === 'gallery';
 
   const handleNavClick = (id) => {
     onNavigate?.(id);
@@ -22,7 +60,7 @@ export default function Navbar({ activeSection, onNavigate }) {
   };
 
   return (
-    <header className="site-header" id="mainHeader">
+    <header className={`site-header ${isHidden ? 'is-hidden' : ''}`} id="mainHeader">
       <div className="header-inner">
         {/* Brand Logo */}
         <a href="#home" className="brand-logo" onClick={() => handleNavClick('home')}>
@@ -75,7 +113,7 @@ export default function Navbar({ activeSection, onNavigate }) {
               animate={{ x: [0, 3, 0] }}
               transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
             >
-              <ArrowRight size={15} strokeWidth={2} />
+              <ArrowRight size={13.5} strokeWidth={2} />
             </motion.span>
           </motion.a>
 

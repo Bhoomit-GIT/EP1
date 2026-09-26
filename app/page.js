@@ -7,42 +7,45 @@ import Hero from '../components/Hero';
 import About from '../components/About';
 import Services from '../components/Services';
 import EventJourney from '../components/EventJourney';
-import dynamic from 'next/dynamic';
-
-const Gallery3D = dynamic(() => import('../components/Gallery3D'), {
-  ssr: false,
-  loading: () => (
-    <div
-      id="gallery"
-      style={{
-        minHeight: '100vh',
-        background: '#070709',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    />
-  ),
-});
+import Gallery3D from '../components/Gallery3D';
+import Contact from '../components/Contact';
+import Footer from '../components/Footer';
 
 export default function Home() {
   const [activeSection, setActiveSection] = useState('home');
 
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPos = window.scrollY + 250;
+      const contactEl = document.getElementById('contact');
       const galleryEl = document.getElementById('gallery');
       const journeyEl = document.getElementById('journey');
       const servicesEl = document.getElementById('services');
       const aboutEl = document.getElementById('about');
 
-      if (galleryEl && scrollPos >= galleryEl.offsetTop) {
+      const vh = window.innerHeight;
+
+      if (contactEl && contactEl.getBoundingClientRect().top <= vh * 0.4) {
+        setActiveSection('contact');
+      } else if (galleryEl && galleryEl.getBoundingClientRect().top <= vh * 0.4) {
         setActiveSection('gallery');
-      } else if (journeyEl && scrollPos >= journeyEl.offsetTop) {
-        setActiveSection('journey');
-      } else if (servicesEl && scrollPos >= servicesEl.offsetTop) {
+      } else if (journeyEl) {
+        const parent = journeyEl.parentElement;
+        const rect =
+          parent && parent.classList.contains('pin-spacer')
+            ? parent.getBoundingClientRect()
+            : journeyEl.getBoundingClientRect();
+        if (rect.top <= 80 && rect.bottom > 80) {
+          setActiveSection('journey');
+        } else if (servicesEl && servicesEl.getBoundingClientRect().top <= vh * 0.4) {
+          setActiveSection('services');
+        } else if (aboutEl && aboutEl.getBoundingClientRect().top <= vh * 0.4) {
+          setActiveSection('about');
+        } else {
+          setActiveSection('home');
+        }
+      } else if (servicesEl && servicesEl.getBoundingClientRect().top <= vh * 0.4) {
         setActiveSection('services');
-      } else if (aboutEl && scrollPos >= aboutEl.offsetTop) {
+      } else if (aboutEl && aboutEl.getBoundingClientRect().top <= vh * 0.4) {
         setActiveSection('about');
       } else {
         setActiveSection('home');
@@ -57,7 +60,11 @@ export default function Home() {
     setActiveSection(id);
     const target = document.getElementById(id);
     if (target) {
-      target.scrollIntoView({ behavior: 'smooth' });
+      if (typeof window !== 'undefined' && window.__lenis) {
+        window.__lenis.scrollTo(target, { offset: 0, duration: 1.4 });
+      } else {
+        target.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   };
 
@@ -71,6 +78,8 @@ export default function Home() {
           <Services />
           <EventJourney />
           <Gallery3D />
+          <Contact />
+          <Footer onNavigate={handleNavigate} />
         </main>
       </div>
     </SmoothScroll>

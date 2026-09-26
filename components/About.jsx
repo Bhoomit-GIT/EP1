@@ -1,23 +1,57 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Heart, Diamond, Users } from 'lucide-react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import VideoModal from './VideoModal';
 import AcousticPill from './AcousticPill';
 
-gsap.registerPlugin(ScrollTrigger);
+if (typeof window !== 'undefined') gsap.registerPlugin(ScrollTrigger);
+
+// Curated Showcase Images from services folder
+const MAIN_IMAGES = [
+  '/services/main/abb532b3cc9af342241524929cb3756f.jpg',
+  '/services/main/cc7f98dcb558f7d4f05efb9cc798a047.jpg',
+];
+
+const SUPPORT_IMAGES = [
+  '/services/support/a544b86495d0ef5c81f479dc14d05517.jpg',
+  '/services/support/fe5eb593bf06104ee2edb6bd2e3fc1b3.jpg',
+];
 
 export default function About() {
   const [isVideoOpen, setIsVideoOpen] = useState(false);
+  const [mainIdx, setMainIdx] = useState(0);
+  const [supportIdx, setSupportIdx] = useState(0);
   const sectionRef = useRef(null);
   const mainArchRef = useRef(null);
   const secondaryArchRef = useRef(null);
   const blushCircleRef = useRef(null);
   const soundwaveRef = useRef(null);
   const pillarsRef = useRef(null);
+
+  // Eye-calming, unhurried staggered crossfade: 7.5s cadence, staggered by 3.8s so both windows never change at once
+  useEffect(() => {
+    const mainTimer = setInterval(() => {
+      setMainIdx((prev) => (prev + 1) % MAIN_IMAGES.length);
+    }, 7500);
+
+    let supportTimer;
+    const initialDelay = setTimeout(() => {
+      setSupportIdx((prev) => (prev + 1) % SUPPORT_IMAGES.length);
+      supportTimer = setInterval(() => {
+        setSupportIdx((prev) => (prev + 1) % SUPPORT_IMAGES.length);
+      }, 7500);
+    }, 3800);
+
+    return () => {
+      clearInterval(mainTimer);
+      clearTimeout(initialDelay);
+      if (supportTimer) clearInterval(supportTimer);
+    };
+  }, []);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -229,15 +263,33 @@ export default function About() {
               {/* Wireframe Curved Arc */}
               <div className="accent-wireframe-arc" aria-hidden="true" />
 
-              {/* Primary Tall Roman Arch Window (Outdoor Wedding Canopy) */}
+              {/* Primary Tall Roman Arch Window (Bigger Image from services/main) */}
               <div className="arch-card-primary" ref={mainArchRef}>
                 <div className="arch-inner-window">
-                  <img
-                    src="/assets/images/about-arch-main.jpg"
-                    alt="Outdoor floral wedding canopy with mountains in background"
-                    className="arch-img"
-                    loading="lazy"
-                  />
+                  {MAIN_IMAGES.map((src, index) => {
+                    const isActive = index === mainIdx;
+                    return (
+                      <motion.img
+                        key={src}
+                        src={src}
+                        alt="Freestyle Curated Event Architecture"
+                        className="arch-img"
+                        initial={false}
+                        animate={{
+                          opacity: isActive ? 1 : 0,
+                          scale: isActive ? 1.025 : 1.0,
+                        }}
+                        transition={{
+                          opacity: { duration: 2.2, ease: [0.4, 0, 0.2, 1] },
+                          scale: { duration: 8, ease: 'easeOut' },
+                        }}
+                        style={{
+                          zIndex: isActive ? 2 : 1,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 
@@ -255,15 +307,33 @@ export default function About() {
                 </svg>
               </div>
 
-              {/* Secondary Overlapping Arch Window (Candlelit Tablescape) */}
+              {/* Secondary Overlapping Arch Window (Smaller Image from services/support) */}
               <div className="arch-card-secondary" ref={secondaryArchRef}>
                 <div className="arch-inner-window secondary">
-                  <img
-                    src="/assets/images/about-arch-detail.jpg"
-                    alt="Atmospheric candlelit banquet table setting with tall glass hurricane cylinders"
-                    className="arch-img"
-                    loading="lazy"
-                  />
+                  {SUPPORT_IMAGES.map((src, index) => {
+                    const isActive = index === supportIdx;
+                    return (
+                      <motion.img
+                        key={src}
+                        src={src}
+                        alt="Freestyle Event Atmospheric Detail"
+                        className="arch-img"
+                        initial={false}
+                        animate={{
+                          opacity: isActive ? 1 : 0,
+                          scale: isActive ? 1.025 : 1.0,
+                        }}
+                        transition={{
+                          opacity: { duration: 2.2, ease: [0.4, 0, 0.2, 1] },
+                          scale: { duration: 8, ease: 'easeOut' },
+                        }}
+                        style={{
+                          zIndex: isActive ? 2 : 1,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 
