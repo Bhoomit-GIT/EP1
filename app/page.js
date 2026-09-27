@@ -8,15 +8,12 @@ import About from '../components/About';
 import Services from '../components/Services';
 import EventJourney from '../components/EventJourney';
 import Gallery3D from '../components/Gallery3D';
-import Contact from '../components/Contact';
-import Footer from '../components/Footer';
 
 export default function Home() {
   const [activeSection, setActiveSection] = useState('home');
 
   useEffect(() => {
     const handleScroll = () => {
-      const contactEl = document.getElementById('contact');
       const galleryEl = document.getElementById('gallery');
       const journeyEl = document.getElementById('journey');
       const servicesEl = document.getElementById('services');
@@ -24,9 +21,7 @@ export default function Home() {
 
       const vh = window.innerHeight;
 
-      if (contactEl && contactEl.getBoundingClientRect().top <= vh * 0.4) {
-        setActiveSection('contact');
-      } else if (galleryEl && galleryEl.getBoundingClientRect().top <= vh * 0.4) {
+      if (galleryEl && galleryEl.getBoundingClientRect().top <= vh * 0.4) {
         setActiveSection('gallery');
       } else if (journeyEl) {
         const parent = journeyEl.parentElement;
@@ -78,8 +73,6 @@ export default function Home() {
           <Services />
           <EventJourney />
           <Gallery3D />
-          <Contact />
-          <Footer onNavigate={handleNavigate} />
         </main>
       </div>
     </SmoothScroll>

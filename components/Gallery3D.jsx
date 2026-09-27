@@ -6,19 +6,31 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
+  Layers,
   Maximize2,
+  Sparkles,
+  Grid,
+  Compass,
   Eye,
 } from 'lucide-react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { GALLERY_IMAGES } from '../data/galleryImages';
 
-if (typeof window !== 'undefined') {
-  gsap.registerPlugin(ScrollTrigger);
-}
+// Curated Category Definitions
+const CATEGORIES = [
+  { id: 'all', label: 'All Archives', icon: Sparkles },
+  { id: 'royal', label: 'Royal Unions', icon: Compass },
+  { id: 'rituals', label: 'Sacred Rituals', icon: Layers },
+  { id: 'galas', label: 'Grand Galas', icon: Maximize2 },
+  { id: 'couture', label: 'Bespoke Couture', icon: Grid },
+];
 
 export default function Gallery3D() {
+  // Presentation modes: 'spatial' (Infinite Continuous Universe), 'runway' (3D Coverflow Deck), 'mosaic' (Haute Couture Grid)
+  const [mode, setMode] = useState('spatial');
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeIndex, setActiveIndex] = useState(0);
   const [lightboxImg, setLightboxImg] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -30,7 +42,9 @@ export default function Gallery3D() {
   const typoRef = useRef(null);
   const sublineRef = useRef(null);
   const cardsWrapperRef = useRef(null);
+  const titleBackdropRef = useRef(null);
   const dragBadgeRef = useRef(null);
+  const badgeTextRef = useRef(null);
 
   // Infinite Canvas Pan Physics (Inertia & Smooth Dampening)
   const panRef = useRef({
@@ -48,99 +62,169 @@ export default function Gallery3D() {
   // Cursor Parallax Ref
   const cursorParallaxRef = useRef({ rawX: 0, rawY: 0, currentX: 0, currentY: 0 });
 
+  // 3D Deck Touch/Drag Physics
+  const deckRef = useRef({
+    startX: 0,
+    isDragging: false,
+  });
+
+  // Tag images with categories
+  const enrichedImages = useMemo(() => {
+    return GALLERY_IMAGES.map((img, idx) => {
+      let category = 'royal';
+      const sub = (img.subtitle || '').toLowerCase();
+
+      if (
+        sub.includes('ritual') ||
+        sub.includes('pheras') ||
+        sub.includes('haldi') ||
+        sub.includes('mehndi') ||
+        sub.includes('gathbandhan') ||
+        sub.includes('fire') ||
+        sub.includes('candle')
+      ) {
+        category = 'rituals';
+      } else if (
+        sub.includes('gala') ||
+        sub.includes('soirée') ||
+        sub.includes('banquet') ||
+        sub.includes('sangeet') ||
+        sub.includes('cocktail') ||
+        sub.includes('dance') ||
+        sub.includes('night') ||
+        sub.includes('festivity')
+      ) {
+        category = 'galas';
+      } else if (
+        sub.includes('couture') ||
+        sub.includes('ensemble') ||
+        sub.includes('arch') ||
+        sub.includes('floral') ||
+        sub.includes('bridal') ||
+        sub.includes('decor') ||
+        sub.includes('design') ||
+        sub.includes('suite')
+      ) {
+        category = 'couture';
+      } else {
+        category = 'royal';
+      }
+
+      return {
+        ...img,
+        galleryIdx: idx,
+        category,
+      };
+    });
+  }, []);
+
+  // Filtered list for Mosaic mode
+  const filteredImages = useMemo(() => {
+    if (activeCategory === 'all') return enrichedImages;
+    return enrichedImages.filter((img) => img.category === activeCategory);
+  }, [enrichedImages, activeCategory]);
+
   // ══════════════════════════════════════════════════════════════════
-  // RANDOMIZED AIRY CONSTELLATION GENERATOR (Unique On Each Load)
-  // 24 Cards distributed across 3600px × 2400px toroidal domain
-  // Maximum distance between adjacent images is bounded (<= 580px - 750px)
-  // Guarantees MINIMUM OF 6 IMAGES visible in frame at all times (sharp + blur)
+  // PROCEDURAL RANDOMIZED CONSTELLATION GENERATOR
+  // - Calibrated max distance so min of 6 images are always visible in frame (including blurry images)
+  // - Enforced min distance (380px) so images are never too close
+  // - Randomized position, aspect (portrait/landscape), and blur tiers each load
+  // - Infinite toroidal wrapping across W = 3200, H = 2200
   // ══════════════════════════════════════════════════════════════════
-  const generateRandomConstellation = useCallback(() => {
-    // Shuffle available 53 high-res images
-    const shuffledImages = [...GALLERY_IMAGES].sort(() => Math.random() - 0.5);
+  const [spatialCards, setSpatialCards] = useState([]);
 
-    const cards = [];
-    let cardIdx = 0;
+  useEffect(() => {
+    const W = 3200;
+    const H = 2200;
+    const cols = 7;
+    const rows = 4;
+    const cellW = W / cols; // ~457px
+    const cellH = H / rows; // ~550px
 
-    // 6 columns × 4 rows = 24 cells
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 6; col++) {
-        const imgData = shuffledImages[cardIdx % shuffledImages.length];
+    const points = [];
+    let imgIdx = Math.floor(Math.random() * enrichedImages.length);
 
-        // Base cell centers across 3600px × 2400px domain
-        const colCenter = -1500 + col * 600;
-        const rowCenter = -900 + row * 600;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        // Cell center coordinates in [-W/2, W/2] x [-H/2, H/2]
+        const cellCenterX = -W / 2 + (c + 0.5) * cellW;
+        const cellCenterY = -H / 2 + (r + 0.5) * cellH;
 
-        // Bounded random jitter (prevents overlapping & guarantees min 6 visible in frame)
-        const jitterX = (Math.random() - 0.5) * 180;
-        const jitterY = (Math.random() - 0.5) * 140;
+        // Controlled random jitter within cell
+        const jitterX = (Math.random() - 0.5) * (cellW * 0.45);
+        const jitterY = (Math.random() - 0.5) * (cellH * 0.45);
 
-        const baseX = Math.round(colCenter + jitterX);
-        const baseY = Math.round(rowCenter + jitterY);
+        const x = Math.round(cellCenterX + jitterX);
+        const y = Math.round(cellCenterY + jitterY);
 
-        // Balanced tier distribution with organic variation
-        const isBaseSharp = (col + row) % 2 === 0;
-        const tier = (Math.random() > 0.15 ? isBaseSharp : !isBaseSharp) ? 'sharp' : 'blur';
+        const isLandscape = Math.random() > 0.5;
+        const isBlurry = Math.random() > 0.52; // ~48% blurry, ~52% sharp
 
-        // Randomized aspect ratio & editorial dimensions
-        const isLandscape = Math.random() > 0.45;
-        let width, height, scale, blur;
+        const img = enrichedImages[imgIdx % enrichedImages.length];
+        imgIdx++;
 
-        if (tier === 'sharp') {
-          scale = 1.0;
-          blur = 0;
-          if (isLandscape) {
-            width = Math.round(280 + Math.random() * 25);
-            height = Math.round(195 + Math.random() * 15);
-          } else {
-            width = Math.round(175 + Math.random() * 15);
-            height = Math.round(250 + Math.random() * 20);
-          }
-        } else {
-          scale = Number((0.72 + Math.random() * 0.04).toFixed(2));
-          blur = Math.round(13 + Math.random() * 4);
-          if (isLandscape) {
-            width = Math.round(250 + Math.random() * 25);
-            height = Math.round(175 + Math.random() * 15);
-          } else {
-            width = Math.round(155 + Math.random() * 15);
-            height = Math.round(225 + Math.random() * 15);
-          }
-        }
-
-        cards.push({
-          ...imgData,
-          galleryIdx: cardIdx,
-          spatialId: `random-card-${cardIdx}-${imgData.id}`,
-          baseX,
-          baseY,
-          width,
-          height,
-          scale,
-          tier,
-          blur,
+        points.push({
+          ...img,
+          spatialId: `card-${r}-${c}-${img.id}-${Math.random().toString(36).substring(2, 7)}`,
+          baseX: x,
+          baseY: y,
           aspect: isLandscape ? 'landscape' : 'portrait',
-          floatDelay: `${-(Math.random() * 8).toFixed(2)}s`,
-          floatDuration: `${(5.8 + Math.random() * 2.8).toFixed(1)}s`,
+          isBlurry,
+          tier: isBlurry ? 'ambient' : 'hero',
+          scale: isBlurry ? 0.78 + Math.random() * 0.08 : 0.98 + Math.random() * 0.08,
+          floatDelay: `${-(Math.random() * 6).toFixed(2)}s`,
+          floatDuration: `${(6.0 + Math.random() * 2.5).toFixed(1)}s`,
         });
-
-        cardIdx++;
       }
     }
 
-    return cards;
-  }, []);
+    // Relaxation passes to guarantee minimum 380px distance between any two images
+    const minDistance = 380;
+    for (let pass = 0; pass < 5; pass++) {
+      for (let i = 0; i < points.length; i++) {
+        for (let j = i + 1; j < points.length; j++) {
+          const dx = points[j].baseX - points[i].baseX;
+          const dy = points[j].baseY - points[i].baseY;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 0 && dist < minDistance) {
+            const overlap = (minDistance - dist) / 2;
+            const nx = (dx / dist) * overlap;
+            const ny = (dy / dist) * overlap;
+            points[i].baseX = Math.round(points[i].baseX - nx);
+            points[i].baseY = Math.round(points[i].baseY - ny);
+            points[j].baseX = Math.round(points[j].baseX + nx);
+            points[j].baseY = Math.round(points[j].baseY + ny);
+          }
+        }
+      }
+    }
 
-  const [spatialUniverseCards, setSpatialUniverseCards] = useState(() => generateRandomConstellation());
+    setSpatialCards(points);
+  }, [enrichedImages]);
 
-  // Randomize fresh layout on client mount
-  useEffect(() => {
-    setSpatialUniverseCards(generateRandomConstellation());
-  }, [generateRandomConstellation]);
+  // Initial title backdrop cards (subtly framing before scroll zoom)
+  const titleBackdropCards = useMemo(() => {
+    const layout = [
+      { x: -420, y: -220, scale: 0.92, blur: 2 },
+      { x:  420, y: -220, scale: 0.92, blur: 2 },
+      { x: -420, y:  220, scale: 0.92, blur: 2 },
+      { x:  420, y:  220, scale: 0.92, blur: 2 },
+      { x: -180, y: -310, scale: 0.78, blur: 4 },
+      { x:  180, y: -310, scale: 0.78, blur: 4 },
+    ];
+    return layout.map((l, idx) => ({
+      ...enrichedImages[idx % enrichedImages.length],
+      ...l,
+    }));
+  }, [enrichedImages]);
 
   // ══════════════════════════════════════════════════════════════════
   // GSAP SCROLL & ENTRANCE ANIMATION (Pinned Stage Timeline)
   // ══════════════════════════════════════════════════════════════════
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      gsap.registerPlugin(ScrollTrigger);
+    }
     if (!sectionRef.current || !stageRef.current) return;
 
     const ctx = gsap.context(() => {
@@ -215,24 +299,38 @@ export default function Gallery3D() {
       // 0% -> 15%: Hold headline
       scrubTL.to({}, { duration: 15 });
 
-      // 15% -> 55%: Dissolve title & bloom spatial canvas forward
+      // 15% -> 60%: Dissolve title + backdrop & bloom spatial canvas forward
       if (typo) {
         scrubTL.to(
           typo,
           {
-            y: -100,
+            y: -120,
             opacity: 0,
-            scale: 0.9,
+            scale: 0.88,
+            filter: 'blur(14px)',
+            ease: 'power2.inOut',
+            duration: 45,
+          },
+          15
+        );
+      }
+
+      if (titleBackdropRef.current) {
+        scrubTL.to(
+          titleBackdropRef.current,
+          {
+            scale: 1.75,
+            opacity: 0,
             filter: 'blur(12px)',
             ease: 'power2.inOut',
-            duration: 40,
+            duration: 45,
           },
           15
         );
       }
 
       if (cardsWrapper) {
-        gsap.set(cardsWrapper, { scale: 0.55, opacity: 0, filter: 'blur(10px)' });
+        gsap.set(cardsWrapper, { scale: 0.45, opacity: 0, filter: 'blur(12px)' });
         scrubTL.to(
           cardsWrapper,
           {
@@ -240,14 +338,14 @@ export default function Gallery3D() {
             opacity: 1.0,
             filter: 'blur(0px)',
             ease: 'power2.out',
-            duration: 40,
+            duration: 45,
           },
           15
         );
       }
 
-      // 55% -> 100%: Active interactive exploration
-      scrubTL.to({}, { duration: 45 }, 55);
+      // 60% -> 100%: Active interactive exploration
+      scrubTL.to({}, { duration: 40 }, 60);
     }, sectionRef);
 
     return () => ctx.revert();
@@ -255,155 +353,219 @@ export default function Gallery3D() {
 
   // ══════════════════════════════════════════════════════════════════
   // RAF PHYSICS LOOP: SEAMLESS TOROIDAL WRAPPING (120 FPS)
-  // 3600px × 2400px domain with offscreen modulo wrapping
+  // Continuous wrapping across W = 3200px × H = 2200px domain
   // ══════════════════════════════════════════════════════════════════
   useEffect(() => {
     let animId;
-    const W = 3600;
-    const H = 2400;
+    const W = 3200;
+    const H = 2200;
     const halfW = W / 2;
     const halfH = H / 2;
 
     const updatePhysics = () => {
-      const pan = panRef.current;
-      const cp = cursorParallaxRef.current;
+      if (mode === 'spatial') {
+        const pan = panRef.current;
+        const cp = cursorParallaxRef.current;
 
-      // Inertial lerp
-      pan.currentX += (pan.targetX - pan.currentX) * 0.085;
-      pan.currentY += (pan.targetY - pan.currentY) * 0.085;
+        // Inertial lerp
+        pan.currentX += (pan.targetX - pan.currentX) * 0.085;
+        pan.currentY += (pan.targetY - pan.currentY) * 0.085;
 
-      // Cursor parallax
-      cp.currentX += (cp.rawX - cp.currentX) * 0.05;
-      cp.currentY += (cp.rawY - cp.currentY) * 0.05;
+        // Cursor parallax
+        cp.currentX += (cp.rawX - cp.currentX) * 0.05;
+        cp.currentY += (cp.rawY - cp.currentY) * 0.05;
 
-      const totalX = pan.currentX + cp.currentX;
-      const totalY = pan.currentY + cp.currentY;
+        const totalX = pan.currentX + cp.currentX;
+        const totalY = pan.currentY + cp.currentY;
 
-      // Seamless toroidal wrap on every card
-      cardRefs.current.forEach((el, idx) => {
-        if (!el) return;
-        const card = spatialUniverseCards[idx];
-        if (!card) return;
+        // Seamless wrap each card element directly
+        cardRefs.current.forEach((el, idx) => {
+          if (!el) return;
+          const card = spatialCards[idx];
+          if (!card) return;
 
-        let rx = (card.baseX + totalX + halfW) % W;
-        if (rx < 0) rx += W;
-        const wrapX = rx - halfW;
+          // Infinite toroidal wrap math
+          let rx = (card.baseX + totalX + halfW) % W;
+          if (rx < 0) rx += W;
+          const wrapX = rx - halfW;
 
-        let ry = (card.baseY + totalY + halfH) % H;
-        if (ry < 0) ry += H;
-        const wrapY = ry - halfH;
+          let ry = (card.baseY + totalY + halfH) % H;
+          if (ry < 0) ry += H;
+          const wrapY = ry - halfH;
 
-        el.style.transform = `translate3d(${wrapX.toFixed(2)}px, ${wrapY.toFixed(2)}px, 0) scale(${card.scale})`;
-      });
+          el.style.transform = `translate3d(${wrapX.toFixed(2)}px, ${wrapY.toFixed(2)}px, 0) scale(${card.scale})`;
+        });
+      }
 
       animId = requestAnimationFrame(updatePhysics);
     };
 
     animId = requestAnimationFrame(updatePhysics);
     return () => cancelAnimationFrame(animId);
-  }, [spatialUniverseCards]);
+  }, [mode, spatialCards]);
 
   // Mouse move handler for Magnetic Cursor & Parallax
-  const handleMouseMove = useCallback((e) => {
-    if (!stageRef.current) return;
-    const rect = stageRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (!stageRef.current) return;
+      const rect = stageRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-    // Parallax shift
-    const cx = rect.width / 2;
-    const cy = rect.height / 2;
-    cursorParallaxRef.current.rawX = ((x - cx) / cx) * -24;
-    cursorParallaxRef.current.rawY = ((y - cy) / cy) * -18;
+      // Parallax shift
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      cursorParallaxRef.current.rawX = ((x - cx) / cx) * -24;
+      cursorParallaxRef.current.rawY = ((y - cy) / cy) * -18;
 
-    // Magnetic Drag Badge Follower (matching reference screenshot)
-    if (dragBadgeRef.current) {
-      dragBadgeRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      // Magnetic Drag Badge
+      if (dragBadgeRef.current) {
+        dragBadgeRef.current.style.transform = `translate3d(${x}px, ${y}px, 0)`;
 
-      const isOverInteractive = Boolean(
-        e.target &&
-          e.target.closest &&
-          e.target.closest('button, a, .lightbox-modal, .gallery-top-nav')
-      );
+        const isOverInteractive = Boolean(
+          e.target &&
+            e.target.closest &&
+            e.target.closest(
+              'button, a, .gallery-header-bar, .gallery-categories-bar, .deck3d-controls-bar, .lightbox-modal, .mosaic-card-shell'
+            )
+        );
 
-      if (isOverInteractive) {
-        dragBadgeRef.current.classList.remove('visible');
-      } else {
-        dragBadgeRef.current.classList.add('visible');
+        if (isOverInteractive || mode !== 'spatial') {
+          dragBadgeRef.current.classList.remove('visible');
+        } else {
+          dragBadgeRef.current.classList.add('visible');
+          if (badgeTextRef.current) {
+            badgeTextRef.current.textContent = 'DRAG';
+          }
+        }
       }
-    }
 
-    // Drag panning
-    if (panRef.current.isPanning) {
-      const dx = e.clientX - panRef.current.lastX;
-      const dy = e.clientY - panRef.current.lastY;
-      panRef.current.targetX += dx * 1.2;
-      panRef.current.targetY += dy * 1.2;
-      panRef.current.velX = dx;
-      panRef.current.velY = dy;
-      panRef.current.lastX = e.clientX;
-      panRef.current.lastY = e.clientY;
-    }
-  }, []);
+      // Drag panning
+      if (panRef.current.isPanning) {
+        const dx = e.clientX - panRef.current.lastX;
+        const dy = e.clientY - panRef.current.lastY;
+        panRef.current.targetX += dx * 1.15;
+        panRef.current.targetY += dy * 1.15;
+        panRef.current.velX = dx;
+        panRef.current.velY = dy;
+        panRef.current.lastX = e.clientX;
+        panRef.current.lastY = e.clientY;
+      }
+    },
+    [mode]
+  );
 
-  const handleMouseDown = useCallback((e) => {
-    if (e.target.closest('button, a, .gallery-top-nav')) return;
-    if (dragBadgeRef.current) {
-      dragBadgeRef.current.classList.add('is-dragging');
-    }
-    panRef.current.isPanning = true;
-    panRef.current.lastX = e.clientX;
-    panRef.current.lastY = e.clientY;
-    setIsDragging(true);
-  }, []);
+  const handleMouseDown = useCallback(
+    (e) => {
+      if (e.target.closest('button, a, .gallery-categories-bar, .gallery-mode-switch')) return;
+      if (dragBadgeRef.current) {
+        dragBadgeRef.current.classList.add('is-dragging');
+      }
+      if (mode === 'spatial') {
+        panRef.current.isPanning = true;
+        panRef.current.lastX = e.clientX;
+        panRef.current.lastY = e.clientY;
+        setIsDragging(true);
+      } else if (mode === 'runway') {
+        deckRef.current.isDragging = true;
+        deckRef.current.startX = e.clientX;
+        setIsDragging(true);
+      }
+    },
+    [mode]
+  );
 
   const handleMouseUp = useCallback(() => {
     if (dragBadgeRef.current) {
       dragBadgeRef.current.classList.remove('is-dragging');
     }
-    panRef.current.isPanning = false;
-    panRef.current.targetX += panRef.current.velX * 5.5;
-    panRef.current.targetY += panRef.current.velY * 5.5;
-    panRef.current.velX = 0;
-    panRef.current.velY = 0;
-    setTimeout(() => setIsDragging(false), 50);
-  }, []);
-
-  // Touch gestures for mobile
-  const handleTouchStart = useCallback((e) => {
-    if (!e.touches[0]) return;
-    const touch = e.touches[0];
-    panRef.current.isPanning = true;
-    panRef.current.lastX = touch.clientX;
-    panRef.current.lastY = touch.clientY;
-  }, []);
-
-  const handleTouchMove = useCallback((e) => {
-    if (!e.touches[0]) return;
-    const touch = e.touches[0];
-    if (panRef.current.isPanning) {
-      const dx = touch.clientX - panRef.current.lastX;
-      const dy = touch.clientY - panRef.current.lastY;
-      panRef.current.targetX += dx * 1.35;
-      panRef.current.targetY += dy * 1.35;
-      panRef.current.lastX = touch.clientX;
-      panRef.current.lastY = touch.clientY;
+    if (mode === 'spatial') {
+      panRef.current.isPanning = false;
+      panRef.current.targetX += panRef.current.velX * 5.5;
+      panRef.current.targetY += panRef.current.velY * 5.5;
+      panRef.current.velX = 0;
+      panRef.current.velY = 0;
+      setTimeout(() => setIsDragging(false), 50);
+    } else if (mode === 'runway') {
+      deckRef.current.isDragging = false;
+      setTimeout(() => setIsDragging(false), 50);
     }
-  }, []);
+  }, [mode]);
+
+  // Touch gestures for mobile devices
+  const handleTouchStart = useCallback(
+    (e) => {
+      if (!e.touches[0]) return;
+      const touch = e.touches[0];
+      if (mode === 'spatial') {
+        panRef.current.isPanning = true;
+        panRef.current.lastX = touch.clientX;
+        panRef.current.lastY = touch.clientY;
+      } else if (mode === 'runway') {
+        deckRef.current.isDragging = true;
+        deckRef.current.startX = touch.clientX;
+      }
+    },
+    [mode]
+  );
+
+  const handleTouchMove = useCallback(
+    (e) => {
+      if (!e.touches[0]) return;
+      const touch = e.touches[0];
+      if (mode === 'spatial' && panRef.current.isPanning) {
+        const dx = touch.clientX - panRef.current.lastX;
+        const dy = touch.clientY - panRef.current.lastY;
+        panRef.current.targetX += dx * 1.35;
+        panRef.current.targetY += dy * 1.35;
+        panRef.current.lastX = touch.clientX;
+        panRef.current.lastY = touch.clientY;
+      } else if (mode === 'runway' && deckRef.current.isDragging) {
+        const dx = touch.clientX - deckRef.current.startX;
+        if (Math.abs(dx) > 40) {
+          if (dx < 0) {
+            setActiveIndex((prev) => (prev + 1) % enrichedImages.length);
+          } else {
+            setActiveIndex((prev) => (prev - 1 + enrichedImages.length) % enrichedImages.length);
+          }
+          deckRef.current.startX = touch.clientX;
+        }
+      }
+    },
+    [mode, enrichedImages.length]
+  );
 
   const handleTouchEnd = useCallback(() => {
-    panRef.current.isPanning = false;
-  }, []);
+    if (mode === 'spatial') {
+      panRef.current.isPanning = false;
+    } else if (mode === 'runway') {
+      deckRef.current.isDragging = false;
+    }
+  }, [mode]);
 
-  // Continuous wheel scrolling
-  const handleWheel = useCallback((e) => {
-    const deltaX = e.deltaX || (e.shiftKey ? e.deltaY : 0);
-    const deltaY = e.shiftKey ? 0 : e.deltaY;
-    panRef.current.targetX -= deltaX * 1.3;
-    panRef.current.targetY -= deltaY * 1.3;
-  }, []);
+  // Wheel navigation for infinite continuous scroll
+  const handleWheel = useCallback(
+    (e) => {
+      if (mode === 'spatial') {
+        // Continuous wheel scrolling pans the infinite canvas
+        const deltaX = e.deltaX || (e.shiftKey ? e.deltaY : 0);
+        const deltaY = e.shiftKey ? 0 : e.deltaY;
+        panRef.current.targetX -= deltaX * 1.25;
+        panRef.current.targetY -= deltaY * 1.25;
+      } else if (mode === 'runway') {
+        if (Math.abs(e.deltaY) > 20 || Math.abs(e.deltaX) > 20) {
+          if (e.deltaY > 0 || e.deltaX > 0) {
+            setActiveIndex((prev) => (prev + 1) % enrichedImages.length);
+          } else {
+            setActiveIndex((prev) => (prev - 1 + enrichedImages.length) % enrichedImages.length);
+          }
+        }
+      }
+    },
+    [mode, enrichedImages.length]
+  );
 
-  // Lightbox click
+  // Open Lightbox
   const handleCardClick = (img) => {
     if (isDragging) return;
     setLightboxImg(img);
@@ -415,22 +577,36 @@ export default function Gallery3D() {
       if (lightboxImg) {
         if (e.key === 'Escape') setLightboxImg(null);
         if (e.key === 'ArrowRight') {
-          const nextIdx = (lightboxImg.galleryIdx + 1) % GALLERY_IMAGES.length;
-          setLightboxImg({ ...GALLERY_IMAGES[nextIdx], galleryIdx: nextIdx });
+          const nextIdx = (lightboxImg.galleryIdx + 1) % enrichedImages.length;
+          setLightboxImg(enrichedImages[nextIdx]);
         }
         if (e.key === 'ArrowLeft') {
           const prevIdx =
-            (lightboxImg.galleryIdx - 1 + GALLERY_IMAGES.length) % GALLERY_IMAGES.length;
-          setLightboxImg({ ...GALLERY_IMAGES[prevIdx], galleryIdx: prevIdx });
+            (lightboxImg.galleryIdx - 1 + enrichedImages.length) % enrichedImages.length;
+          setLightboxImg(enrichedImages[prevIdx]);
+        }
+        return;
+      }
+
+      if (mode === 'runway') {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          setActiveIndex((prev) => (prev + 1) % enrichedImages.length);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          setActiveIndex((prev) => (prev - 1 + enrichedImages.length) % enrichedImages.length);
         }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxImg]);
+  }, [lightboxImg, mode, enrichedImages]);
 
   return (
-    <section ref={sectionRef} id="gallery" className="gallery-editorial-universe">
+    <section
+      ref={sectionRef}
+      id="gallery"
+      className={`gallery-luxury-universe mode-${mode}`}
+    >
       {/* Pinned Stage Viewport */}
       <div
         ref={stageRef}
@@ -438,86 +614,400 @@ export default function Gallery3D() {
         onMouseMove={handleMouseMove}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
+        onMouseLeave={() => {
+          if (dragBadgeRef.current) {
+            dragBadgeRef.current.classList.remove('visible');
+            dragBadgeRef.current.classList.remove('is-dragging');
+          }
+        }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
       >
-        {/* Top Minimalist Header (Matching Reference Screenshot) */}
-        <header className="gallery-top-nav">
-          <div className="gallery-brand-tag">
-            <span>THE ARCHIVES</span>
+        {/* Ambient Cosmic Star Dust Particles */}
+        <div className="gallery-ambient-particles" aria-hidden="true">
+          <div className="ambient-glow-orb orb-gold-1" />
+          <div className="ambient-glow-orb orb-gold-2" />
+        </div>
+
+        {/* ── Top Header Navigation Bar ──────────────────────────────── */}
+        <header className="gallery-header-bar">
+          <div className="gallery-eyebrow-capsule">
+            <span className="gallery-eyebrow-tag">ROYAL ARCHIVES</span>
+            <span className="gallery-eyebrow-dot" />
+            <span className="gallery-eyebrow-title">
+              {enrichedImages.length} BESPOKE MOMENTS
+            </span>
           </div>
-          <div className="gallery-menu-hint">
-            <span>Curated Moments</span>
+
+          {/* Mode Switcher Pill */}
+          <div className="gallery-mode-switch">
+            <button
+              type="button"
+              className={`mode-btn ${mode === 'spatial' ? 'active' : ''}`}
+              onClick={() => setMode('spatial')}
+              title="Endless Spatial Universe"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>SPATIAL</span>
+            </button>
+
+            <button
+              type="button"
+              className={`mode-btn ${mode === 'runway' ? 'active' : ''}`}
+              onClick={() => setMode('runway')}
+              title="3D Perspective Runway Deck"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>3D RUNWAY</span>
+            </button>
+
+            <button
+              type="button"
+              className={`mode-btn ${mode === 'mosaic' ? 'active' : ''}`}
+              onClick={() => setMode('mosaic')}
+              title="Editorial Haute Couture Masonry"
+            >
+              <Grid className="w-3.5 h-3.5" />
+              <span>EDITORIAL</span>
+            </button>
           </div>
         </header>
 
-        {/* Magnetic DRAG Pill Follower Badge (Matching Reference Screenshot) */}
-        <div ref={dragBadgeRef} className="gallery-drag-pill-badge" aria-hidden="true">
-          <span>DRAG</span>
-        </div>
+        {/* ── Category Filter Pills (Shown in Mosaic Mode) ─────────── */}
+        {mode === 'mosaic' && (
+          <motion.div
+            className="gallery-categories-bar"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+          >
+            {CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const count =
+                cat.id === 'all'
+                  ? enrichedImages.length
+                  : enrichedImages.filter((img) => img.category === cat.id).length;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`category-pill ${activeCategory === cat.id ? 'active' : ''}`}
+                  onClick={() => setActiveCategory(cat.id)}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{cat.label}</span>
+                  <span className="category-count">{count}</span>
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
 
-        {/* Central Luxury Serif Headline with Split Word Animation (Dissolves on Scroll) */}
-        <div ref={typoRef} className="gallery-center-typography" aria-hidden="true">
-          <h2 className="editorial-headline">
-            <span className="luxury-word-mask">
-              <span className="luxury-word">A</span>
-            </span>{' '}
-            <span className="luxury-word-mask">
-              <span className="luxury-word">NEW</span>
-            </span>{' '}
-            <span className="luxury-word-mask">
-              <span className="luxury-word">ERA</span>
-            </span>{' '}
-            <span className="luxury-word-mask">
-              <span className="luxury-word">OF</span>
-            </span>{' '}
-            <span className="luxury-word-mask">
-              <span className="luxury-word luxury-word-gold">LUXURY</span>
-            </span>
-          </h2>
-          <p ref={sublineRef} className="editorial-subline">
-            AN IMMERSIVE ODYSSEY OF SACRED CELEBRATION
-          </p>
-        </div>
+        {/* ── Magnetic Custom Follower Badge ────────────────────────── */}
+        {mode === 'spatial' && (
+          <div ref={dragBadgeRef} className="gallery-magnetic-badge" aria-hidden="true">
+            <span ref={badgeTextRef}>DRAG</span>
+          </div>
+        )}
 
-        {/* Seamless Infinite Toroidal Constellation Canvas */}
-        <div ref={cardsWrapperRef} className="gallery-cards-focal-wrapper">
-          <div ref={canvasRef} className="gallery-spatial-plane">
-            {spatialUniverseCards.map((item, idx) => (
+        {/* ============================================================ */}
+        {/* PRESENTATION MODE 1: SPATIAL UNIVERSE (Infinite Continuous Horizon) */}
+        {/* ============================================================ */}
+        <AnimatePresence>
+          {mode === 'spatial' && (
+            <motion.div
+              key="spatial-universe-view"
+              className="gallery-spatial-wrapper"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            >
+              {/* Initial Title Backdrop Cards (dissolves on scroll) */}
               <div
-                key={item.spatialId}
-                ref={(el) => (cardRefs.current[idx] = el)}
-                className={`airy-editorial-card tier-${item.tier}`}
-                style={{
-                  width: `${item.width}px`,
-                  height: `${item.height}px`,
-                  marginTop: `-${item.height / 2}px`,
-                  marginLeft: `-${item.width / 2}px`,
-                  filter: item.tier === 'blur' ? `blur(${item.blur}px)` : 'none',
-                  opacity: item.tier === 'blur' ? 0.42 : 1.0,
-                  zIndex: item.tier === 'sharp' ? 10 : 2,
-                  animationDelay: item.floatDelay,
-                  animationDuration: item.floatDuration,
-                }}
-                onClick={() => handleCardClick(item)}
+                ref={titleBackdropRef}
+                className="gallery-title-backdrop-plane"
+                aria-hidden="true"
               >
-                <div className="airy-card-inner">
-                  <img
-                    src={item.src}
-                    alt={item.title}
-                    loading="lazy"
-                    draggable={false}
-                  />
-                  {item.tier === 'sharp' && (
-                    <div className="card-subtle-shadow" />
-                  )}
+                {titleBackdropCards.map((img, idx) => (
+                  <div
+                    key={`title-bg-${idx}-${img.id}`}
+                    className="title-backdrop-card"
+                    style={{
+                      transform: `translate3d(${img.x}px, ${img.y}px, 0) scale(${img.scale})`,
+                      filter: `blur(${img.blur}px)`,
+                    }}
+                  >
+                    <div className="card-image-shell">
+                      <img src={img.src} alt={img.title} draggable={false} />
+                      <div className="card-ambient-shadow" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Central Luxury Serif Headline with Split Word Animation */}
+              <div ref={typoRef} className="gallery-center-typography" aria-hidden="true">
+                <h2 className="luxury-headline">
+                  <span className="luxury-word-mask">
+                    <span className="luxury-word">A</span>
+                  </span>{' '}
+                  <span className="luxury-word-mask">
+                    <span className="luxury-word">NEW</span>
+                  </span>{' '}
+                  <span className="luxury-word-mask">
+                    <span className="luxury-word">ERA</span>
+                  </span>{' '}
+                  <span className="luxury-word-mask">
+                    <span className="luxury-word">OF</span>
+                  </span>{' '}
+                  <span className="luxury-word-mask">
+                    <span className="luxury-word luxury-word-gold">LUXURY</span>
+                  </span>
+                </h2>
+                <p ref={sublineRef} className="luxury-subline">
+                  AN IMMERSIVE ODYSSEY OF SACRED CELEBRATION
+                </p>
+              </div>
+
+              {/* Seamless Infinite Toroidal Constellation Canvas */}
+              <div ref={cardsWrapperRef} className="gallery-cards-focal-wrapper">
+                <div ref={canvasRef} className="gallery-spatial-plane">
+                  {spatialCards.map((item, idx) => (
+                    <div
+                      key={item.spatialId}
+                      ref={(el) => (cardRefs.current[idx] = el)}
+                      className={`spatial-card tier-${item.tier} aspect-${item.aspect}`}
+                      style={{
+                        animationDelay: item.floatDelay,
+                        animationDuration: item.floatDuration,
+                      }}
+                      onClick={() => handleCardClick(item)}
+                    >
+                      <div className="spatial-card-inner">
+                        <img
+                          src={item.src}
+                          alt={item.title}
+                          loading="lazy"
+                          draggable={false}
+                        />
+                        <div className="card-ambient-shadow" />
+                        <div className="card-gold-border-glow" />
+
+                        {/* Hover Metadata Pill */}
+                        <div className="spatial-card-caption">
+                          <span className="caption-sub">{item.subtitle}</span>
+                          <h4 className="caption-title">{item.title}</h4>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ============================================================ */}
+        {/* PRESENTATION MODE 2: 3D RUNWAY DECK (Infinite Looping Coverflow) */}
+        {/* ============================================================ */}
+        <AnimatePresence>
+          {mode === 'runway' && (
+            <motion.div
+              key="runway-3d-view"
+              className="gallery-runway-wrapper"
+              initial={{ opacity: 0, scale: 1.04 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.92 }}
+              transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            >
+              {/* 3D Curved Perspective Stage */}
+              <div className="runway-stage-viewport">
+                <div className="runway-carousel">
+                  {enrichedImages.map((img, idx) => {
+                    const diff = idx - activeIndex;
+                    const total = enrichedImages.length;
+                    
+                    // Normalized shortest circular distance for infinite looping
+                    let circularDiff = diff;
+                    if (circularDiff > total / 2) circularDiff -= total;
+                    if (circularDiff < -total / 2) circularDiff += total;
+
+                    const absDiff = Math.abs(circularDiff);
+
+                    // Optimized render window
+                    if (absDiff > 6) return null;
+
+                    const translateX = circularDiff * 280;
+                    const translateZ = -absDiff * 190;
+                    const rotateY = Math.max(-50, Math.min(50, -circularDiff * 35));
+                    const scale = Math.max(0.7, 1 - absDiff * 0.08);
+                    const opacity = Math.max(0.2, 1 - absDiff * 0.18);
+                    const blur = absDiff > 0 ? Math.min(6, absDiff * 1.5) : 0;
+                    const zIndex = 50 - absDiff;
+
+                    return (
+                      <div
+                        key={`runway-${img.id}`}
+                        className={`runway-card ${absDiff === 0 ? 'is-active' : ''}`}
+                        style={{
+                          transform: `translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${scale})`,
+                          zIndex,
+                          opacity,
+                          filter: blur > 0 ? `blur(${blur}px)` : 'none',
+                          transition: isDragging
+                            ? 'none'
+                            : 'transform 0.65s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease, filter 0.5s ease',
+                        }}
+                        onClick={() => {
+                          if (absDiff === 0) handleCardClick(img);
+                          else setActiveIndex(idx);
+                        }}
+                      >
+                        <div className="runway-card-inner">
+                          <img
+                            src={img.src}
+                            alt={img.title}
+                            draggable={false}
+                            loading={absDiff <= 2 ? 'eager' : 'lazy'}
+                          />
+                          <div className="runway-glass-reflection" />
+                          <div className="runway-card-border" />
+
+                          {/* Center Active Metadata */}
+                          {absDiff === 0 && (
+                            <motion.div
+                              className="runway-active-meta"
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.4, delay: 0.1 }}
+                            >
+                              <span className="runway-category-tag">{img.subtitle}</span>
+                              <h3 className="runway-active-title">{img.title}</h3>
+                              <button
+                                type="button"
+                                className="runway-expand-pill"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCardClick(img);
+                                }}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>VIEW FULLSCREEN</span>
+                              </button>
+                            </motion.div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Obsidian Glass Reflection Floor */}
+                <div className="runway-floor-reflection" aria-hidden="true" />
+              </div>
+
+              {/* Bottom Navigation Controls & Infinite Filmstrip Mini-Scrubber */}
+              <div className="deck3d-controls-bar">
+                <button
+                  type="button"
+                  className="deck3d-nav-btn"
+                  onClick={() =>
+                    setActiveIndex((prev) => (prev - 1 + enrichedImages.length) % enrichedImages.length)
+                  }
+                  title="Previous Moment"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+
+                {/* Filmstrip Mini-Dots */}
+                <div className="deck3d-filmstrip-track">
+                  {enrichedImages.map((_, dotIdx) => (
+                    <button
+                      key={`dot-${dotIdx}`}
+                      type="button"
+                      className={`filmstrip-dot ${dotIdx === activeIndex ? 'active' : ''}`}
+                      onClick={() => setActiveIndex(dotIdx)}
+                      title={`Jump to Moment ${dotIdx + 1}`}
+                    />
+                  ))}
+                </div>
+
+                <div className="deck3d-counter-pill">
+                  <span className="counter-current">
+                    {String(activeIndex + 1).padStart(2, '0')}
+                  </span>
+                  <span className="counter-slash">/</span>
+                  <span className="counter-total">
+                    {String(enrichedImages.length).padStart(2, '0')}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className="deck3d-nav-btn"
+                  onClick={() =>
+                    setActiveIndex((prev) => (prev + 1) % enrichedImages.length)
+                  }
+                  title="Next Moment"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ============================================================ */}
+        {/* PRESENTATION MODE 3: HAUTE COUTURE MOSAIC (Editorial Masonry) */}
+        {/* ============================================================ */}
+        <AnimatePresence>
+          {mode === 'mosaic' && (
+            <motion.div
+              key="mosaic-editorial-view"
+              className="gallery-mosaic-wrapper"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <div
+                className="mosaic-scroll-container"
+                onWheel={(e) => e.stopPropagation()}
+              >
+                <div className="mosaic-masonry-grid">
+                  {filteredImages.map((img, idx) => (
+                    <motion.div
+                      key={`mosaic-${img.id}`}
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.4, delay: (idx % 12) * 0.04 }}
+                      className="mosaic-card-shell"
+                      onClick={() => handleCardClick(img)}
+                    >
+                      <div className="mosaic-image-wrapper">
+                        <img src={img.src} alt={img.title} loading="lazy" />
+                        <div className="mosaic-gradient-overlay" />
+                        <div className="mosaic-hover-badge">
+                          <Eye className="w-4 h-4" />
+                        </div>
+                        <div className="mosaic-card-meta">
+                          <span className="mosaic-sub">{img.subtitle}</span>
+                          <h4 className="mosaic-title">{img.title}</h4>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ============================================================ */}
         {/* UNIVERSAL CINEMA LIGHTBOX (Ultra-Luxe Fullscreen Theater) */}
@@ -559,6 +1049,7 @@ export default function Gallery3D() {
                     alt={lightboxImg.title}
                     className="lightbox-main-img"
                   />
+                  <div className="lightbox-glass-shimmer" />
                 </div>
 
                 {/* Bottom Metadata & Navigation Controls */}
@@ -574,9 +1065,9 @@ export default function Gallery3D() {
                       className="lightbox-arrow-btn"
                       onClick={() => {
                         const prevIdx =
-                          (lightboxImg.galleryIdx - 1 + GALLERY_IMAGES.length) %
-                          GALLERY_IMAGES.length;
-                        setLightboxImg({ ...GALLERY_IMAGES[prevIdx], galleryIdx: prevIdx });
+                          (lightboxImg.galleryIdx - 1 + enrichedImages.length) %
+                          enrichedImages.length;
+                        setLightboxImg(enrichedImages[prevIdx]);
                       }}
                       title="Previous (Left Arrow)"
                     >
@@ -585,7 +1076,7 @@ export default function Gallery3D() {
 
                     <span className="lightbox-counter">
                       {String(lightboxImg.galleryIdx + 1).padStart(2, '0')} /{' '}
-                      {String(GALLERY_IMAGES.length).padStart(2, '0')}
+                      {String(enrichedImages.length).padStart(2, '0')}
                     </span>
 
                     <button
@@ -593,8 +1084,8 @@ export default function Gallery3D() {
                       className="lightbox-arrow-btn"
                       onClick={() => {
                         const nextIdx =
-                          (lightboxImg.galleryIdx + 1) % GALLERY_IMAGES.length;
-                        setLightboxImg({ ...GALLERY_IMAGES[nextIdx], galleryIdx: nextIdx });
+                          (lightboxImg.galleryIdx + 1) % enrichedImages.length;
+                        setLightboxImg(enrichedImages[nextIdx]);
                       }}
                       title="Next (Right Arrow)"
                     >
