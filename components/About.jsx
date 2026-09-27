@@ -7,6 +7,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import VideoModal from './VideoModal';
 import AcousticPill from './AcousticPill';
+import RosePetalShower from './RosePetalShower';
 
 if (typeof window !== 'undefined') gsap.registerPlugin(ScrollTrigger);
 
@@ -25,6 +26,7 @@ export default function About() {
   const [isVideoOpen, setIsVideoOpen] = useState(false);
   const [mainIdx, setMainIdx] = useState(0);
   const [supportIdx, setSupportIdx] = useState(0);
+  const [isSectionVisible, setIsSectionVisible] = useState(false);
   const sectionRef = useRef(null);
   const mainArchRef = useRef(null);
   const secondaryArchRef = useRef(null);
@@ -51,6 +53,22 @@ export default function About() {
       clearTimeout(initialDelay);
       if (supportTimer) clearInterval(supportTimer);
     };
+  }, []);
+
+  // Track section visibility for performance - only animate petals when in view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsSectionVisible(entry.isIntersecting);
+      },
+      { rootMargin: '100px', threshold: 0.1 }
+    );
+
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
+    }
+
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -257,6 +275,12 @@ export default function About() {
              =============================================================== */}
           <div className="editorial-center-col">
             <div className="arches-composition-wrapper">
+              {/* Rose Petal Shower - Blissful floral ambiance matching the imagery */}
+              <RosePetalShower 
+                isActive={isSectionVisible} 
+                intensity="gentle" 
+              />
+
               {/* Soft Blush Circle Accent (Top Right) */}
               <div className="accent-circle-blush" ref={blushCircleRef} aria-hidden="true" />
 

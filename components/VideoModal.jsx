@@ -1,46 +1,90 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Play, Pause, Volume2, VolumeX, Maximize2, Sparkles } from 'lucide-react';
+import { X, Play, Pause, Maximize2, Sparkles } from 'lucide-react';
+import useModalA11y from './useModalA11y';
+
+const SHOWREEL_SRC = '/assets/video/showreel.mp4';
+
+const formatTime = (seconds) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
 
 export default function VideoModal({ isOpen, onClose }) {
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const [progress, setProgress] = useState(28); // Simulated or active progress percentage
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const videoRef = useRef(null);
   const videoContainerRef = useRef(null);
 
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        onClose?.();
-      }
-    };
+  useModalA11y(isOpen, onClose, videoContainerRef);
 
+  const stopLenis = useCallback(() => {
+    window.__lenis?.stop?.();
+  }, []);
+
+  const startLenis = useCallback(() => {
+    window.__lenis?.start?.();
+  }, []);
+
+  // Scroll lock (Lenis-aware)
+  useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
+      stopLenis();
     } else {
       document.body.style.overflow = '';
+      startLenis();
     }
 
     return () => {
       document.body.style.overflow = '';
-      window.removeEventListener('keydown', handleKeyDown);
+      startLenis();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, stopLenis, startLenis]);
 
-  // Simulated playback time advancement
+  // Pause + reset playback when modal closes
   useEffect(() => {
-    if (!isOpen || !isPlaying) return;
+    if (!isOpen && videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+      setIsPlaying(false);
+      setProgress(0);
+      setCurrentTime(0);
+    }
+  }, [isOpen]);
 
-    const interval = setInterval(() => {
-      setProgress((prev) => (prev >= 100 ? 0 : prev + 0.4));
-    }, 200);
+  const togglePlay = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
 
-    return () => clearInterval(interval);
-  }, [isOpen, isPlaying]);
+    if (video.paused) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  }, []);
+
+  const handleSeek = (e) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(video.duration)) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    video.currentTime = ratio * video.duration;
+  };
+
+  const handleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      videoContainerRef.current?.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -65,13 +109,15 @@ export default function VideoModal({ isOpen, onClose }) {
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
             onClick={(e) => e.stopPropagation()}
             ref={videoContainerRef}
+            tabIndex={-1}
+            style={{ outline: 'none' }}
           >
             {/* Modal Header */}
             <div className="video-modal-header">
               <div className="modal-title-group">
                 <span className="modal-kicker">
                   <Sparkles size={13} className="kicker-sparkle" />
-                  OUR STORY & ARCHIVES
+                  OUR STORY &amp; ARCHIVES
                 </span>
                 <h3 id="videoModalTitle" className="modal-headline">
                   Watch How We Create Magic
@@ -90,12 +136,27 @@ export default function VideoModal({ isOpen, onClose }) {
               </motion.button>
             </div>
 
-            {/* Video Viewport / Showcase Canvas */}
+            {/* Video Viewport */}
             <div className="video-viewport">
-              <img
-                src="/assets/images/about-arch-main.jpg"
-                alt="Story backdrop showing atmospheric mountain canopy wedding"
+              <video
+                ref={videoRef}
                 className={`video-backdrop-media ${isPlaying ? 'playing' : 'paused'}`}
+                src={SHOWREEL_SRC}
+                playsInline
+                muted
+                loop
+                preload="metadata"
+                onClick={togglePlay}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                onTimeUpdate={(e) => {
+                  const video = e.currentTarget;
+                  setCurrentTime(video.currentTime);
+                  if (Number.isFinite(video.duration) && video.duration > 0) {
+                    setProgress((video.currentTime / video.duration) * 100);
+                  }
+                }}
               />
 
               {/* Ambient Vignette & Lighting Gradients */}
@@ -103,8 +164,8 @@ export default function VideoModal({ isOpen, onClose }) {
 
               {/* Central Play/Pause Pulse Button */}
               <motion.button
-                className="center-play-toggle"
-                onClick={() => setIsPlaying(!isPlaying)}
+                className={`center-play-toggle ${isPlaying ? 'is-playing' : ''}`}
+                onClick={togglePlay}
                 whileHover={{ scale: 1.12 }}
                 whileTap={{ scale: 0.92 }}
                 aria-label={isPlaying ? 'Pause video' : 'Play video'}
@@ -119,25 +180,15 @@ export default function VideoModal({ isOpen, onClose }) {
               {/* Live Status Tag */}
               <div className="video-meta-badge">
                 <span className="live-dot" />
-                <span>DIRECTOR'S CUT &bull; 4K 60FPS</span>
+                <span>OFFICIAL SHOWREEL &bull; 2026</span>
               </div>
 
               {/* Video Bottom Controls Bar */}
               <div className="video-controls-bar">
-                {/* Scrub Track */}
-                <div
-                  className="video-progress-container"
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const clickX = e.clientX - rect.left;
-                    setProgress((clickX / rect.width) * 100);
-                  }}
-                >
+                {/* Seek Track */}
+                <div className="video-progress-container" onClick={handleSeek}>
                   <div className="video-progress-track">
-                    <motion.div
-                      className="video-progress-fill"
-                      style={{ width: `${progress}%` }}
-                    />
+                    <div className="video-progress-fill" style={{ width: `${progress}%` }} />
                   </div>
                 </div>
 
@@ -145,36 +196,23 @@ export default function VideoModal({ isOpen, onClose }) {
                   <div className="controls-left">
                     <button
                       className="control-icon-btn"
-                      onClick={() => setIsPlaying(!isPlaying)}
+                      onClick={togglePlay}
                       aria-label={isPlaying ? 'Pause' : 'Play'}
                     >
                       {isPlaying ? <Pause size={17} /> : <Play size={17} />}
                     </button>
 
-                    <button
-                      className="control-icon-btn"
-                      onClick={() => setIsMuted(!isMuted)}
-                      aria-label={isMuted ? 'Unmute' : 'Mute'}
-                    >
-                      {isMuted ? <VolumeX size={17} /> : <Volume2 size={17} />}
-                    </button>
-
                     <span className="timestamp-display">
-                      01:14 <span className="time-sep">/</span> 03:42
+                      {formatTime(currentTime)} <span className="time-sep">/</span>{' '}
+                      {formatTime(duration)}
                     </span>
                   </div>
 
                   <div className="controls-right">
-                    <span className="quality-pill">4K UHD</span>
+                    <span className="quality-pill">FREESTYLE FILMS</span>
                     <button
                       className="control-icon-btn"
-                      onClick={() => {
-                        if (!document.fullscreenElement) {
-                          videoContainerRef.current?.requestFullscreen?.();
-                        } else {
-                          document.exitFullscreen?.();
-                        }
-                      }}
+                      onClick={handleFullscreen}
                       aria-label="Full screen"
                     >
                       <Maximize2 size={17} />
@@ -187,7 +225,8 @@ export default function VideoModal({ isOpen, onClose }) {
             {/* Video Footer Caption */}
             <div className="video-modal-footer">
               <p className="footer-caption">
-                From bespoke floral architecture to private acoustic sundowners, witness the meticulous craftsmanship and raw emotion behind every Freestyle experience.
+                From bespoke floral architecture to private acoustic sundowners, witness the
+                meticulous craftsmanship and raw emotion behind every Freestyle experience.
               </p>
             </div>
           </motion.div>

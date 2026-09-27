@@ -3,6 +3,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import useModalA11y from './useModalA11y';
 
 if (typeof window !== 'undefined') gsap.registerPlugin(ScrollTrigger);
 
@@ -160,8 +161,12 @@ export default function EventJourney() {
   const accentBottomRefs = useRef([]);
   const flowGradRef = useRef(null);
   const progressBarRef = useRef(null);
+  const masterSTRef = useRef(null);
+  const closeTimeoutRef = useRef(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const [selectedMilestone, setSelectedMilestone] = useState(null);
+  const [rsvpSubmitted, setRsvpSubmitted] = useState(false);
+  const rsvpModalRef = useRef(null);
 
   useEffect(() => {
     if (!sectionRef.current || !stageRef.current || !trackRef.current) return;
@@ -188,6 +193,9 @@ export default function EventJourney() {
           },
         },
       });
+
+      // Cache the ScrollTrigger for exact milestone navigation math
+      masterSTRef.current = masterTL.scrollTrigger;
 
       // 1. Horizontal track glide (scrolling towards the right as user scrolls down)
       masterTL.to(
@@ -348,12 +356,39 @@ export default function EventJourney() {
   }, []);
 
   const scrollToMilestone = (idx) => {
-    if (!sectionRef.current) return;
-    const start = sectionRef.current.offsetTop;
-    const scrollDistance = (JOURNEY_MILESTONES.length * 100 * window.innerHeight) / 100;
-    const targetScroll = start + (idx / (JOURNEY_MILESTONES.length - 1)) * scrollDistance;
-    window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+    const st = masterSTRef.current;
+    if (!st) return;
+    // Glide finishes at 100/110 of the timeline duration — mirror the same math
+    const glideScroll = (st.end - st.start) * (100 / 110);
+    const targetScroll = st.start + (idx / (JOURNEY_MILESTONES.length - 1)) * glideScroll;
+
+    if (typeof window !== 'undefined' && window.__lenis) {
+      window.__lenis.scrollTo(targetScroll, {
+        duration: 1.6,
+        easing: (t) => 1 - Math.pow(1 - t, 4),
+      });
+    } else {
+      window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+    }
   };
+
+  // Lock scroll (Lenis-aware) while the RSVP modal is open + a11y focus trap
+  useModalA11y(Boolean(selectedMilestone), () => setSelectedMilestone(null), rsvpModalRef);
+
+  useEffect(() => {
+    if (selectedMilestone) {
+      setRsvpSubmitted(false);
+      window.__lenis?.stop?.();
+    } else {
+      window.__lenis?.start?.();
+    }
+
+    return () => {
+      window.__lenis?.start?.();
+    };
+  }, [selectedMilestone]);
+
+  useEffect(() => () => clearTimeout(closeTimeoutRef.current), []);
 
   return (
     <section ref={sectionRef} id="journey" className="journey-section">
@@ -500,6 +535,14 @@ export default function EventJourney() {
                       </div>
                       <h3 className="journey-subtitle">{item.subtitle}</h3>
                       <p className="journey-description">{item.description}</p>
+                      <button
+                        type="button"
+                        className="journey-panel-cta"
+                        onClick={() => setSelectedMilestone(item)}
+                      >
+                        {item.cta}
+                        <span className="cta-arrow" aria-hidden="true">→</span>
+                      </button>
                     </div>
                   </div>
 
@@ -606,6 +649,8 @@ export default function EventJourney() {
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
+            ref={rsvpModalRef}
+            tabIndex={-1}
           >
             <button
               type="button"
@@ -627,14 +672,36 @@ export default function EventJourney() {
             </p>
             <p className="modal-event-venue">{selectedMilestone.location}</p>
 
-            <form
-              className="modal-rsvp-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                alert(`Reservation confirmed for ${selectedMilestone.subtitle}! A confirmation pass has been sent to your email.`);
-                setSelectedMilestone(null);
-              }}
-            >
+            {rsvpSubmitted ? (
+              <div className="rsvp-success" role="status">
+                <div className="rsvp-success-mark" aria-hidden="true">
+                  <svg viewBox="0 0 52 52" width="52" height="52">
+                    <circle className="rsvp-success-circle" cx="26" cy="26" r="24" fill="none" />
+                    <path className="rsvp-success-check" d="M14 27 L23 36 L38 19" fill="none" />
+                  </svg>
+                </div>
+                <h4 className="rsvp-success-title">Reservation confirmed</h4>
+                <p className="rsvp-success-copy">
+                  Your pass for <strong>{selectedMilestone.subtitle}</strong> is being prepared.
+                  A confirmation will reach your inbox shortly.
+                </p>
+                <button
+                  type="button"
+                  className="modal-submit-btn"
+                  onClick={() => setSelectedMilestone(null)}
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form
+                className="modal-rsvp-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setRsvpSubmitted(true);
+                  closeTimeoutRef.current = setTimeout(() => setSelectedMilestone(null), 4200);
+                }}
+              >
               <div className="form-field">
                 <label htmlFor="rsvp-name">Full Name</label>
                 <input id="rsvp-name" type="text" placeholder="e.g. Helena Vance" required />
@@ -648,7 +715,8 @@ export default function EventJourney() {
               <button type="submit" className="modal-submit-btn">
                 Confirm Reservation Pass →
               </button>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}

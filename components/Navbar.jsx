@@ -63,7 +63,14 @@ export default function Navbar({ activeSection, onNavigate }) {
     <header className={`site-header ${isHidden ? 'is-hidden' : ''}`} id="mainHeader">
       <div className="header-inner">
         {/* Brand Logo */}
-        <a href="#home" className="brand-logo" onClick={() => handleNavClick('home')}>
+        <a
+          href="#home"
+          className="brand-logo"
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavClick('home');
+          }}
+        >
           <motion.span whileHover={{ scale: 1.03 }} transition={{ duration: 0.2 }}>
             FREESTYLE
           </motion.span>
@@ -144,7 +151,10 @@ export default function Navbar({ activeSection, onNavigate }) {
                   <a
                     href={`#${item.id}`}
                     className="mobile-nav-link"
-                    onClick={() => handleNavClick(item.id)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleNavClick(item.id);
+                    }}
                   >
                     {item.label}
                   </a>
@@ -155,7 +165,10 @@ export default function Navbar({ activeSection, onNavigate }) {
               href="#contact"
               className="btn-pill"
               style={{ width: '100%', justifyContent: 'center' }}
-              onClick={() => setMobileOpen(false)}
+              onClick={(e) => {
+                e.preventDefault();
+                handleNavClick('contact');
+              }}
             >
               PLAN AN EVENT <ArrowRight size={15} style={{ marginLeft: 8 }} />
             </a>

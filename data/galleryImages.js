@@ -1,7 +1,7 @@
 // 53 Curated Gallery Images for Freestyle Luxury Events
 export const GALLERY_IMAGES = [
   { id: 1, src: '/gallery/02c58ba48a80d5f9c332534c604c8bae.jpg', title: 'Acoustic Grace', subtitle: 'Royal Union' },
-  { id: 2, src: '/gallery/06e66a2677b4657c63105c50da3d7e28 (1).jpg', title: 'Golden Radiance', subtitle: 'Sunset Pavilion' },
+  { id: 2, src: '/gallery/06e66a2677b4657c63105c50da3d7e28-alt.jpg', title: 'Golden Radiance', subtitle: 'Sunset Pavilion' },
   { id: 3, src: '/gallery/06e66a2677b4657c63105c50da3d7e28.jpg', title: 'Celestial Glow', subtitle: 'Sacred Rituals' },
   { id: 4, src: '/gallery/0fdc341cafb93570ebab3beca6e29310.jpg', title: 'Velvet Horizon', subtitle: 'Evening Soirée' },
   { id: 5, src: '/gallery/189e883b72a815f74c375673bee705b9.jpg', title: 'Opulent Florals', subtitle: 'Grand Arch' },
@@ -32,8 +32,8 @@ export const GALLERY_IMAGES = [
   { id: 30, src: '/gallery/9c5f5e18d0d53a68ad063320f1e582ed.jpg', title: 'Sunset Serenade', subtitle: 'Terrace Cocktail' },
   { id: 31, src: '/gallery/9cc79c9df10e08be1d0d8d3c6e1e71c5.jpg', title: 'Gilded Details', subtitle: 'Artisanal Decor' },
   { id: 32, src: '/gallery/9dff07580b03c059844fd50918f7f7e5.jpg', title: 'Couture Reverie', subtitle: 'Bridal Portrait' },
-  { id: 33, src: '/gallery/ChatGPT Image Sep 25, 2026, 02_26_47 PM.png', title: 'Futuristic Romance', subtitle: 'Immersive Design' },
-  { id: 34, src: '/gallery/ChatGPT Image Sep 25, 2026, 02_26_49 PM.png', title: 'Astral Pavilion', subtitle: 'Spatial Experience' },
+  { id: 33, src: '/gallery/immersive-lightscape.jpg', title: 'Futuristic Romance', subtitle: 'Immersive Design' },
+  { id: 34, src: '/gallery/aurora-pavilion.jpg', title: 'Astral Pavilion', subtitle: 'Spatial Experience' },
   { id: 35, src: '/gallery/aaee1741dfa18be01b3c8c8ba36c00e4.jpg', title: 'Opal Bloom', subtitle: 'Petal Shower' },
   { id: 36, src: '/gallery/acdef3d9172f9c242aada9da29047184.jpg', title: 'Warmth & Radiance', subtitle: 'Family Blessings' },
   { id: 37, src: '/gallery/b5e49c4d9689d52af22b1138d495a1b9.jpg', title: 'Enchanted Woodland', subtitle: 'Forest Wedding' },
@@ -42,7 +42,7 @@ export const GALLERY_IMAGES = [
   { id: 40, src: '/gallery/bff66cba5d8a0fa6dfd74c8f762c3241.jpg', title: 'Velvet Twilight', subtitle: 'Starlit Promenade' },
   { id: 41, src: '/gallery/c0be78b444bd69f7d5d8fd7cc4171795.jpg', title: 'Amber Solitude', subtitle: 'Pre-Ceremony Peace' },
   { id: 42, src: '/gallery/c2f2c2e02314c81ae18b298b52825fd7.jpg', title: 'Crystal Reflection', subtitle: 'Waterfront Mandap' },
-  { id: 43, src: '/gallery/c4c967fe68b0857352b22241c8daac1a (1).jpg', title: 'Pure Euphoria', subtitle: 'The Grand Finale' },
+  { id: 43, src: '/gallery/c4c967fe68b0857352b22241c8daac1a-alt.jpg', title: 'Pure Euphoria', subtitle: 'The Grand Finale' },
   { id: 44, src: '/gallery/c4c967fe68b0857352b22241c8daac1a.jpg', title: 'Timeless Elegance', subtitle: 'Infinite Journey' },
   { id: 45, src: '/gallery/d8e6b00bcebee6640116efc8ed7fc2aa.jpg', title: 'Gilded Architecture', subtitle: 'Arch of Triumph' },
   { id: 46, src: '/gallery/ddedc25fa090f841ab801bff945c11a7.jpg', title: 'Sacred Threads', subtitle: 'Gathbandhan Moment' },

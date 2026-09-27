@@ -16,6 +16,7 @@ import {
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { GALLERY_IMAGES } from '../data/galleryImages';
+import useModalA11y from './useModalA11y';
 
 // Curated Category Definitions
 const CATEGORIES = [
@@ -45,6 +46,7 @@ export default function Gallery3D() {
   const titleBackdropRef = useRef(null);
   const dragBadgeRef = useRef(null);
   const badgeTextRef = useRef(null);
+  const lightboxDialogRef = useRef(null);
 
   // Infinite Canvas Pan Physics (Inertia & Smooth Dampening)
   const panRef = useRef({
@@ -67,6 +69,17 @@ export default function Gallery3D() {
     startX: 0,
     isDragging: false,
   });
+
+  // Refs for pinned-state tracking (avoids re-subscribing wheel on state changes)
+  const isPinnedRef = useRef(false);
+  const modeRef = useRef(mode);
+  const lightboxImgRef = useRef(null);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+  useEffect(() => {
+    lightboxImgRef.current = lightboxImg;
+  }, [lightboxImg]);
 
   // Tag images with categories
   const enrichedImages = useMemo(() => {
@@ -292,6 +305,8 @@ export default function Gallery3D() {
             if (typo) {
               typo.style.pointerEvents = self.progress > 0.35 ? 'none' : 'auto';
             }
+            // Track pinned state so wheel-hijack only runs while the stage is active
+            isPinnedRef.current = self.progress > 0 && self.progress < 1;
           },
         },
       });
@@ -363,6 +378,12 @@ export default function Gallery3D() {
     const halfH = H / 2;
 
     const updatePhysics = () => {
+      // Skip work entirely when the tab is hidden
+      if (document.hidden) {
+        animId = requestAnimationFrame(updatePhysics);
+        return;
+      }
+
       if (mode === 'spatial') {
         const pan = panRef.current;
         const cp = cursorParallaxRef.current;
@@ -546,13 +567,20 @@ export default function Gallery3D() {
   // Wheel navigation for infinite continuous scroll
   const handleWheel = useCallback(
     (e) => {
-      if (mode === 'spatial') {
+      const activeMode = modeRef.current;
+      const isModalOpen = Boolean(lightboxImgRef.current);
+
+      if (activeMode === 'spatial') {
+        // Only pan while the pinned stage is active — otherwise let the page scroll normally
+        if (!isPinnedRef.current || isModalOpen) return;
+        e.preventDefault();
         // Continuous wheel scrolling pans the infinite canvas
         const deltaX = e.deltaX || (e.shiftKey ? e.deltaY : 0);
         const deltaY = e.shiftKey ? 0 : e.deltaY;
         panRef.current.targetX -= deltaX * 1.25;
         panRef.current.targetY -= deltaY * 1.25;
-      } else if (mode === 'runway') {
+      } else if (activeMode === 'runway') {
+        if (!isPinnedRef.current || isModalOpen) return;
         if (Math.abs(e.deltaY) > 20 || Math.abs(e.deltaX) > 20) {
           if (e.deltaY > 0 || e.deltaX > 0) {
             setActiveIndex((prev) => (prev + 1) % enrichedImages.length);
@@ -562,14 +590,26 @@ export default function Gallery3D() {
         }
       }
     },
-    [mode, enrichedImages.length]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [enrichedImages.length]
   );
+
+  // Native non-passive wheel listener so preventDefault() actually works
+  // (React's synthetic onWheel is passive on modern browsers)
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.addEventListener('wheel', handleWheel, { passive: false });
+    return () => stage.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
   // Open Lightbox
   const handleCardClick = (img) => {
     if (isDragging) return;
     setLightboxImg(img);
   };
+
+  useModalA11y(Boolean(lightboxImg), () => setLightboxImg(null), lightboxDialogRef);
 
   // Keyboard navigation
   useEffect(() => {
@@ -623,7 +663,6 @@ export default function Gallery3D() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onWheel={handleWheel}
       >
         {/* Ambient Cosmic Star Dust Particles */}
         <div className="gallery-ambient-particles" aria-hidden="true">
@@ -1031,6 +1070,8 @@ export default function Gallery3D() {
                 exit={{ scale: 0.88, opacity: 0 }}
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 onClick={(e) => e.stopPropagation()}
+                ref={lightboxDialogRef}
+                tabIndex={-1}
               >
                 {/* Close Button */}
                 <button

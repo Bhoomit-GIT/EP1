@@ -1,18 +1,113 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import {
+  motion,
+  useMotionValue,
+  useSpring,
+  useTransform,
+  animate,
+  useInView,
+  AnimatePresence,
+} from 'framer-motion';
 import { ArrowRight, Plus } from 'lucide-react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 if (typeof window !== 'undefined') gsap.registerPlugin(ScrollTrigger);
 
+const ROTATING_WORDS = ['Unforgettable', 'Timeless', 'Limitless'];
+
+/* ------------------------------------------------------------------ */
+/* Count-up number for stat badges                                     */
+/* ------------------------------------------------------------------ */
+function StatCounter({ value, suffix = '', duration = 1.6 }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-40px' });
+  const [display, setDisplay] = useState(0);
+  const reduced =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    if (!inView) return;
+    if (reduced) {
+      setDisplay(value);
+      return;
+    }
+    const controls = animate(0, value, {
+      duration,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    });
+    return () => controls.stop();
+  }, [inView, value, duration, reduced]);
+
+  return (
+    <span ref={ref}>
+      {display}
+      {suffix}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Magnetic hover wrapper — element gravitates toward the cursor       */
+/* ------------------------------------------------------------------ */
+function Magnetic({ children, strength = 0.32 }) {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const sx = useSpring(x, { stiffness: 220, damping: 16, mass: 0.6 });
+  const sy = useSpring(y, { stiffness: 220, damping: 16, mass: 0.6 });
+
+  const handleMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    x.set((e.clientX - (rect.left + rect.width / 2)) * strength);
+    y.set((e.clientY - (rect.top + rect.height / 2)) * strength);
+  };
+  const handleLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
+
+  return (
+    <motion.div className="magnetic" style={{ x: sx, y: sy }} onMouseMove={handleMove} onMouseLeave={handleLeave}>
+      {children}
+    </motion.div>
+  );
+}
+
 export default function Hero() {
   const heroRef = useRef(null);
+  const heroWrapperRef = useRef(null);
   const centerCardRef = useRef(null);
   const topRightCardRef = useRef(null);
   const badgeRef = useRef(null);
+
+  // Rotating headline word
+  const [wordIdx, setWordIdx] = useState(0);
+  const reducedMotion = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    []
+  );
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    let interval;
+    const startDelay = setTimeout(() => {
+      interval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          setWordIdx((prev) => (prev + 1) % ROTATING_WORDS.length);
+        }
+      }, 3000);
+    }, 1400);
+    return () => {
+      clearTimeout(startDelay);
+      if (interval) clearInterval(interval);
+    };
+  }, [reducedMotion]);
 
   // Framer Motion 3D interactive tilt for center card
   const mouseX = useMotionValue(0);
@@ -78,16 +173,50 @@ export default function Hero() {
           },
         });
       }
+
+      // Cinematic dolly: hero recedes gently as the story begins
+      if (heroWrapperRef.current && !reducedMotion) {
+        gsap.to(heroWrapperRef.current, {
+          yPercent: -4,
+          scale: 0.988,
+          opacity: 0.45,
+          transformOrigin: 'center top',
+          ease: 'none',
+          scrollTrigger: {
+            trigger: heroRef.current,
+            start: 'top top',
+            end: 'bottom top',
+            scrub: true,
+          },
+        });
+      }
     }, heroRef);
 
     return () => ctx.revert();
-  }, []);
+  }, [reducedMotion]);
+
+  // Kinetic line reveal variants
+  const lineReveal = {
+    hidden: { yPercent: 118 },
+    visible: (i) => ({
+      yPercent: 0,
+      transition: { duration: 0.95, delay: 0.18 + i * 0.1, ease: [0.16, 1, 0.3, 1] },
+    }),
+  };
 
   return (
     <section className="hero-section" id="home" ref={heroRef}>
       <div className="bg-shape-arc" aria-hidden="true" />
 
-      <div className="hero-wrapper">
+      {/* Animated Aurora Gradient Backdrop + Film Grain */}
+      <div className="hero-aurora" aria-hidden="true">
+        <div className="aurora-blob b1" />
+        <div className="aurora-blob b2" />
+        <div className="aurora-blob b3" />
+      </div>
+      <div className="hero-grain" aria-hidden="true" />
+
+      <div className="hero-wrapper" ref={heroWrapperRef}>
         {/* Left Column: Typographic & Messaging Core */}
         <div className="hero-left">
           <motion.div
@@ -100,23 +229,50 @@ export default function Hero() {
           </motion.div>
 
           <div className="headline-service-lockup">
-            <motion.h1
-              className="hero-title"
-              initial={{ opacity: 0, y: 25 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            >
-              Ideas.<br />
-              People.<br />
-              Unforgettable<br />
-              Experiences.
-            </motion.h1>
+            <h1 className="hero-title">
+              <span className="hero-line-mask">
+                <motion.span className="hero-line" custom={0} variants={lineReveal} initial="hidden" animate="visible">
+                  Ideas.
+                </motion.span>
+              </span>
+              <br />
+              <span className="hero-line-mask">
+                <motion.span className="hero-line" custom={1} variants={lineReveal} initial="hidden" animate="visible">
+                  People.
+                </motion.span>
+              </span>
+              <br />
+              <span className="hero-line-mask hero-line-mask-rotating">
+                <motion.span className="hero-line" custom={2} variants={lineReveal} initial="hidden" animate="visible">
+                  <span className="rotating-word-mask">
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span
+                        key={wordIdx}
+                        className="rotating-word"
+                        initial={{ yPercent: 112 }}
+                        animate={{ yPercent: 0 }}
+                        exit={{ yPercent: -112 }}
+                        transition={{ duration: 0.55, ease: [0.76, 0, 0.24, 1] }}
+                      >
+                        {ROTATING_WORDS[wordIdx]}
+                      </motion.span>
+                    </AnimatePresence>
+                  </span>
+                </motion.span>
+              </span>
+              <br />
+              <span className="hero-line-mask">
+                <motion.span className="hero-line" custom={3} variants={lineReveal} initial="hidden" animate="visible">
+                  Experiences.
+                </motion.span>
+              </span>
+            </h1>
 
             <motion.div
               className="side-service-block"
               initial={{ opacity: 0, x: 15 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.8, delay: 0.55, ease: [0.16, 1, 0.3, 1] }}
             >
               {/* 8-Point Swiss Asterisk */}
               <div className="swiss-asterisk" aria-hidden="true">
@@ -144,28 +300,35 @@ export default function Hero() {
             className="hero-description"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.7, delay: 0.62, ease: [0.16, 1, 0.3, 1] }}
           >
             Freestyle is an event management studio crafting meaningful moments for brands, people and communities.
           </motion.p>
 
           {/* Action CTAs */}
-          <div className="hero-cta-group">
-            <motion.a
-              href="#contact"
-              className="btn-hero-primary"
-              whileHover={{ y: -3, scale: 1.02, backgroundColor: '#262626' }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            >
-              <span>PLAN YOUR EVENT</span>
-              <motion.span
-                animate={{ x: [0, 4, 0] }}
-                transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+          <motion.div
+            className="hero-cta-group"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.72, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <Magnetic strength={0.28}>
+              <motion.a
+                href="#contact"
+                className="btn-hero-primary"
+                whileHover={{ y: -3, scale: 1.02, backgroundColor: '#262626' }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               >
-                <ArrowRight size={17} strokeWidth={2} />
-              </motion.span>
-            </motion.a>
+                <span>PLAN YOUR EVENT</span>
+                <motion.span
+                  animate={{ x: [0, 4, 0] }}
+                  transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+                >
+                  <ArrowRight size={17} strokeWidth={2} />
+                </motion.span>
+              </motion.a>
+            </Magnetic>
 
             <motion.a
               href="#about"
@@ -175,7 +338,7 @@ export default function Hero() {
             >
               <span>VIEW OUR WORK</span>
             </motion.a>
-          </div>
+          </motion.div>
 
           {/* Bottom Indexed Rail & Timeline */}
           <div className="hero-bottom-rail">
@@ -217,13 +380,15 @@ export default function Hero() {
               style={{ rotateX, rotateY, transformPerspective: 1000 }}
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.9, delay: 0.9, ease: [0.16, 1, 0.3, 1] }}
             >
               <div className="card-inner-silhouette">
                 <img
                   src="/assets/images/hero-concert.jpg"
                   alt="Live concert festival crowd with golden confetti"
                   className="card-img"
+                  width="800"
+                  height="1067"
                   loading="eager"
                   fetchPriority="high"
                 />
@@ -265,12 +430,14 @@ export default function Hero() {
                 className="card-top-right"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.8, delay: 1.0, ease: [0.16, 1, 0.3, 1] }}
               >
                 <img
                   src="/assets/images/hero-wedding.jpg"
                   alt="Atmospheric candlelit event hall with chandeliers"
                   className="card-img"
+                  width="640"
+                  height="480"
                   loading="eager"
                 />
               </motion.div>
@@ -279,10 +446,12 @@ export default function Hero() {
                 className="stat-badge-events"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.7, delay: 0.45 }}
+                transition={{ duration: 0.7, delay: 1.15 }}
                 whileHover={{ y: -3 }}
               >
-                <div className="stat-number">200+</div>
+                <div className="stat-number">
+                  <StatCounter value={200} suffix="+" />
+                </div>
                 <div className="stat-label">EVENTS<br />DELIVERED</div>
                 <div className="stat-dash" aria-hidden="true" />
               </motion.div>
@@ -294,19 +463,23 @@ export default function Hero() {
                 className="card-middle-right"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.8, delay: 1.1, ease: [0.16, 1, 0.3, 1] }}
                 whileHover={{ y: -2 }}
               >
                 <img
                   src="/assets/images/hero-glassware.jpg"
                   alt="Fine dining table glassware setting"
                   className="card-img"
+                  width="640"
+                  height="480"
                   loading="lazy"
                 />
               </motion.div>
 
               <div className="stat-badge-clients">
-                <div className="stat-number">5K+</div>
+                <div className="stat-number">
+                  <StatCounter value={5} suffix="K+" />
+                </div>
                 <div className="stat-label">HAPPY<br />CLIENTS</div>
               </div>
             </div>
@@ -316,12 +489,12 @@ export default function Hero() {
               className="bottom-social-proof"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.5 }}
+              transition={{ duration: 0.7, delay: 1.2 }}
             >
               <div className="avatar-stack">
-                <div className="avatar-item"><img src="/assets/images/avatar1.jpg" alt="Client 1" /></div>
-                <div className="avatar-item"><img src="/assets/images/avatar2.jpg" alt="Client 2" /></div>
-                <div className="avatar-item"><img src="/assets/images/avatar3.jpg" alt="Client 3" /></div>
+                <div className="avatar-item"><img src="/assets/images/avatar1.jpg" alt="Client 1" width="56" height="56" /></div>
+                <div className="avatar-item"><img src="/assets/images/avatar2.jpg" alt="Client 2" width="56" height="56" /></div>
+                <div className="avatar-item"><img src="/assets/images/avatar3.jpg" alt="Client 3" width="56" height="56" /></div>
                 <div className="avatar-item avatar-plus" title="More clients">
                   <Plus size={16} strokeWidth={2.4} />
                 </div>
@@ -333,6 +506,24 @@ export default function Hero() {
               </div>
             </motion.div>
           </div>
+        </div>
+      </div>
+
+      {/* Infinite Brand Marquee Trust Strip */}
+      <div className="hero-marquee" aria-hidden="true">
+        <div className="hero-marquee-track">
+          {[0, 1].map((copy) => (
+            <div className="hero-marquee-group" key={copy}>
+              {['WEDDINGS', 'CORPORATE GALAS', 'LIVE CONCERTS', 'BRAND ACTIVATIONS', 'PRIVATE SOIRÉES', 'CULTURAL FESTIVALS'].map(
+                (item) => (
+                  <span className="hero-marquee-item" key={`${copy}-${item}`}>
+                    {item}
+                    <span className="marquee-separator" />
+                  </span>
+                )
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </section>

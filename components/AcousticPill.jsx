@@ -32,6 +32,7 @@ export default function AcousticPill({ containerRef }) {
   const analyserRef = useRef(null);
   const sourceRef = useRef(null);
   const animFrameRef = useRef(null);
+  const eqBarsRef = useRef(null);
 
   const currentTrack = PLAYLIST[trackIndex];
 
@@ -101,22 +102,30 @@ export default function AcousticPill({ containerRef }) {
     }
   };
 
-  // Real-time animation loop reading audio frequencies
+  // Real-time animation loop reading audio frequencies.
+  // Writes transforms directly to the DOM — no React state at 60fps.
   const startVisualizerLoop = () => {
     const update = () => {
-      if (analyserRef.current && isPlaying) {
+      if (analyserRef.current) {
         const bufferLength = analyserRef.current.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         analyserRef.current.getByteFrequencyData(dataArray);
 
         // Sample 5 distinct frequency bands (sub-bass, low-mid, mid, upper-mid, treble)
-        const b1 = Math.max(0.2, (dataArray[2] || 0) / 255);
-        const b2 = Math.max(0.25, (dataArray[5] || 0) / 255);
-        const b3 = Math.max(0.35, (dataArray[9] || 0) / 255);
-        const b4 = Math.max(0.25, (dataArray[14] || 0) / 255);
-        const b5 = Math.max(0.2, (dataArray[20] || 0) / 255);
+        const bands = [
+          Math.max(0.2, (dataArray[2] || 0) / 255),
+          Math.max(0.25, (dataArray[5] || 0) / 255),
+          Math.max(0.35, (dataArray[9] || 0) / 255),
+          Math.max(0.25, (dataArray[14] || 0) / 255),
+          Math.max(0.2, (dataArray[20] || 0) / 255),
+        ];
 
-        setBarScales([b1, b2, b3, b4, b5]);
+        const bars = eqBarsRef.current?.children;
+        if (bars) {
+          for (let i = 0; i < bars.length; i++) {
+            bars[i].style.transform = `scaleY(${bands[i] * 2.2 + 0.3})`;
+          }
+        }
       }
       animFrameRef.current = requestAnimationFrame(update);
     };
@@ -265,15 +274,11 @@ export default function AcousticPill({ containerRef }) {
         <div className="soundwave-ambient-glow" aria-hidden="true" />
 
         {/* Dynamic Equalizer Frequency Bars with Real/Idle Animation */}
-        <div className="soundwave-equalizer-bars" aria-hidden="true">
+        <div className="soundwave-equalizer-bars" aria-hidden="true" ref={eqBarsRef}>
           {barScales.map((scale, i) => (
             <span
               key={i}
               className={`eq-bar eq-${i + 1} ${isPlaying ? 'animate-real' : 'idle'}`}
-              style={{
-                transform: isPlaying ? `scaleY(${scale * 2.2 + 0.3})` : undefined,
-                height: isPlaying ? '24px' : undefined,
-              }}
             />
           ))}
         </div>

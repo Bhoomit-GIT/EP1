@@ -31,7 +31,7 @@ export const viewport = {
 };
 
 export const metadata = {
-  metadataBase: new URL('https://freestyle-events.vercel.app'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://freestyle-events.vercel.app'),
   title: 'FREESTYLE — Event Management Studio',
   description: 'Freestyle is an independent event management studio crafting meaningful moments for weddings, festivals, corporate gatherings, and communities.',
   keywords: ['event management', 'luxury weddings', 'event studio', 'curated celebrations', 'freestyle events'],
@@ -39,12 +39,12 @@ export const metadata = {
   creator: 'Freestyle Events',
   openGraph: {
     title: 'FREESTYLE — Event Management Studio',
-    description: 'Freestyle is an independent event management studio crafting meaningful moments for brands, people and communities.',
+    description: 'Crafting meaningful moments for brands, people and communities.',
     url: 'https://freestyle-events.vercel.app',
     siteName: 'FREESTYLE Events Studio',
     images: [
       {
-        url: '/assets/images/about-arch-main.jpg',
+        url: '/assets/images/og-cover.jpg',
         width: 1200,
         height: 630,
         alt: 'Freestyle Event Studio Showcase',
@@ -57,7 +57,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'FREESTYLE — Event Management Studio',
     description: 'Crafting meaningful moments for brands, people and communities.',
-    images: ['/assets/images/about-arch-main.jpg'],
+    images: ['/assets/images/og-cover.jpg'],
   },
   robots: {
     index: true,
